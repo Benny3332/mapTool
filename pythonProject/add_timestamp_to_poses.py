@@ -24,8 +24,8 @@ def prepend_timestamps(poses_path, stamp_path, store_path):
 
 
 if __name__ == '__main__':
-    folder_name = 'gml_2024-10-15-10-45-17/'
-    file_name = 'poses.txt'
+    folder_name = 'gml_2024-10-15-19-38-50/'
+    file_name = 'pose_mid_360.txt'
     base_path = '/media/benny/bennyMove/data/dog_origin/'
     poses_path = base_path + folder_name + file_name
     store_path = base_path + folder_name + 'poses_stamped.txt'
