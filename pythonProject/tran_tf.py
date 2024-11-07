@@ -8,11 +8,17 @@ from scipy.spatial.transform import Rotation as R
 
 # 转换矩阵
 tr_matrix_lidar_2_depth = np.array([
-    [-0.0347702, -0.999329, -0.0115237, -0.113479],
-    [0.0359214, 0.0102735, -0.999302, 0.216314],
-    [0.99875, -0.0351599, 0.0355401, 0.00212184],
+    [-0.0347702, -0.999329, -0.0115237, 0.103479],
+    [0.0359214, 0.0102735, -0.999302, 0.006314],
+    [0.99875, -0.0351599, 0.0355401, -0.23212184],
     [0, 0, 0, 1]
 ])
+# tr_matrix_lidar_2_depth = np.array([
+#     [-0.0347702, -0.999329, -0.0115237, -0.113479],
+#     [0.0359214, 0.0102735, -0.999302, 0.216314],
+#     [0.99875, -0.0351599, 0.0355401, 0.00212184],
+#     [0, 0, 0, 1]
+# ])
 # mm
 tr_imu_2_lidar =np.array([11,23.29,-44.12])
 # 四元数转旋转矩阵
@@ -68,7 +74,7 @@ def write_poses(poses, store_path):
 
 
 if __name__ == '__main__':
-    folder_name = 'gml_2024-10-15-10-45-17/'
+    folder_name = 'gml_2024-11-05-14-54-19/'
     file_name = 'pose_mid_360.txt'
     base_path = '/media/benny/bennyMove/data/dog_origin/'
     poses_path = base_path + folder_name + file_name
@@ -78,11 +84,11 @@ if __name__ == '__main__':
     poses = read_poses(poses_path)
 
     # 转换位姿 imu_2_lidar
-    tr_imu_2_lidar_m = tr_imu_2_lidar / 1000
-    transformed_poses = transform_poses(poses, np.eye(3), tr_imu_2_lidar_m.reshape(-1, 1))
+    # tr_imu_2_lidar_m = tr_imu_2_lidar / 1000
+    # transformed_poses = transform_poses(poses, np.eye(3), tr_imu_2_lidar_m.reshape(-1, 1))
 
     # 转换位姿 mid_360_2_depth
-    transformed_poses = transform_poses(transformed_poses, tr_matrix_lidar_2_depth[:3, :3], tr_matrix_lidar_2_depth[:3, 3])
+    transformed_poses = transform_poses(poses, tr_matrix_lidar_2_depth[:3, :3], tr_matrix_lidar_2_depth[:3, 3])
 
     # depth_2_correct_dir
     rot_change = R.from_euler('XYZ', [90, 0, 90], degrees=True).as_matrix()
