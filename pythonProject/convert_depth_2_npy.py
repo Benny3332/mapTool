@@ -1,6 +1,8 @@
 import os
 from PIL import Image
 import numpy as np
+from gmlDogRecordFilePath import file_path
+from gmlDogRecordFilePath import file_pre_path
 
 
 # 从file_path 中读取全部.png 深度图
@@ -44,9 +46,9 @@ def process_depth_images(file_path, store_path):
 
 
 if __name__ == "__main__":
-    folder_name = 'gml_2024-10-15-19-38-50/'
-    base_path = '/media/benny/bennyMove/data/dog_origin/'
-
+    folder_name = file_path
+    base_path = file_pre_path
+    print("file full path：" + base_path + folder_name)
     file_path = base_path + folder_name + 'depth_png/'
     store_path = base_path + folder_name + 'depth/'
     process_depth_images(file_path, store_path)
