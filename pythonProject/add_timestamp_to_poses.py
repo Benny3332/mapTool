@@ -1,3 +1,5 @@
+from gmlDogRecordFilePath import file_path
+
 def prepend_timestamps(poses_path, stamp_path, store_path):
     # 读取时间戳文件
     with open(stamp_path, 'r') as stamp_file:
@@ -24,8 +26,8 @@ def prepend_timestamps(poses_path, stamp_path, store_path):
 
 
 if __name__ == '__main__':
-    folder_name = 'gml_2024-10-15-19-38-50/'
-    file_name = 'pose_mid_360.txt'
+    folder_name = file_path
+    file_name = 'poses.txt'
     base_path = '/media/benny/bennyMove/data/dog_origin/'
     poses_path = base_path + folder_name + file_name
     store_path = base_path + folder_name + 'poses_stamped.txt'

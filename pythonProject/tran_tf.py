@@ -5,7 +5,7 @@
 
 import numpy as np
 from scipy.spatial.transform import Rotation as R
-
+from gmlDogRecordFilePath import file_path
 # 转换矩阵
 tr_matrix_lidar_2_depth = np.array([
     [-0.0347702, -0.999329, -0.0115237, 0.103479],
@@ -74,7 +74,7 @@ def write_poses(poses, store_path):
 
 
 if __name__ == '__main__':
-    folder_name = 'gml_2024-11-05-14-54-19/'
+    folder_name = file_path
     file_name = 'pose_mid_360.txt'
     base_path = '/media/benny/bennyMove/data/dog_origin/'
     poses_path = base_path + folder_name + file_name
