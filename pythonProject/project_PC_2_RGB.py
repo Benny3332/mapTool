@@ -35,6 +35,11 @@ def transform_points(points, T_world_to_camera):
     points_camera = points_camera[:3, :].T
     mask = points_camera[:, 2] >= 0
     filtered_points_camera = points_camera[mask]
+
+    # filter too far point
+    mask_2 = filtered_points_camera[:, 2] <= 9
+    filtered_points_camera = filtered_points_camera[mask_2]
+
     return filtered_points_camera
 
 
@@ -107,7 +112,16 @@ def visualize_point_cloud(points, points_in_fov, T_world_to_camera, fov_horizont
     # 设置视野内的点云
     pcd_in_fov = o3d.geometry.PointCloud()
     pcd_in_fov.points = o3d.utility.Vector3dVector(points_in_fov)
-    pcd_in_fov.paint_uniform_color([1, 0, 0])  # 将视野内的点云设为红色
+
+    # 计算Z轴的最大最小值以便归一化
+    fov_z_values = np.array(points)[:, 2]  # 提取所有点的Z坐标
+
+    # 应用自定义的热图颜色映射
+    fov_colors = colormap_jet(fov_z_values)
+
+    # 将颜色分配给点云
+    pcd_in_fov.colors = o3d.utility.Vector3dVector(fov_colors)
+    # pcd_in_fov.paint_uniform_color([1, 0, 0])  # 将视野内的点云设为红色
 
     # # 获取相机位置
     # camera_position = T_world_to_camera[:3, 3]
@@ -155,7 +169,7 @@ def visualize_point_cloud(points, points_in_fov, T_world_to_camera, fov_horizont
     # 调整点的大小
     vis = o3d.visualization.Visualizer()
     vis.create_window()
-    vis.add_geometry(pcd)
+    # vis.add_geometry(pcd)
     vis.add_geometry(pcd_in_fov)
     # vis.add_geometry(coord_frame)
     vis.add_geometry(line_set)
@@ -164,31 +178,56 @@ def visualize_point_cloud(points, points_in_fov, T_world_to_camera, fov_horizont
     render_option.point_size = 0.5  # 设置点的大小
     vis.run()
 
-
 def visualize_points_on_image(points_in_fov, u, v, img_path):
     img = cv2.imread(img_path)
+    if img is None:
+        print(f"Error loading image from path: {img_path}")
+        return
+    # 计算Z轴的最大最小值以便归一化
+    fov_z_values = np.array(points_in_fov)[:, 2]  # 提取所有点的Z坐标
 
-    # 提取z坐标
-    z_values = points_in_fov[:, 2]
+    # 应用自定义的热图颜色映射
+    colors = colormap_jet(fov_z_values)
 
-    # 应用热力图颜色映射
-    colors = colormap_jet(z_values)
+    # 由于colors是NumPy数组，我们可以直接使用它而无需再次转换
+    colors_bgr = (colors * 255).astype(np.uint8)[:, ::-1]  # 一次性转换所有颜色到BGR并取整
 
     for i in range(len(points_in_fov)):
-        if i % 10 == 0:
-            color = (colors[i] * 255).astype(int)  # 将颜色从0-1范围转换为0-255范围
-            bgr_color = color[::-1]  # OpenCV使用BGR格式
-            cv2.circle(img, (int(u[i]), int(v[i])), 1, color.tolist(), -1)
+        # 直接使用转换后的BGR颜色
+        if i % 40 == 0:
+            cv2.rectangle(img, (int(u[i]), int(v[i])), (int(u[i]) + 1, int(v[i]) + 1), colors_bgr[i].tolist(), -1)
 
     cv2.imshow('Points on Image', img)
     cv2.waitKey(0)
     cv2.destroyAllWindows()
 
+def create_depth_map(u, v, depth, img_shape):
+    depth_map = np.full(img_shape, np.inf, dtype=np.float32)
+    u_valid = u.astype(int)
+    v_valid = v.astype(int)
+
+    # 更新depth_map中有效索引位置的深度值为当前值与depth_valid中的较小值
+    depth_map[v_valid, u_valid] = np.minimum(depth_map[v_valid, u_valid], depth)
+
+    # 将depth_map中仍为无穷大的值设置为0，表示这些位置的深度是未知的或无效的
+    depth_map[depth_map == np.inf] = 0
+
+    # 返回更新后的深度图
+    return depth_map
+
+
+def display_depth_map(depth_map):
+    depth_map_normalized = (depth_map / np.max(depth_map) * 255).astype(np.uint8)
+    depth_map_colored = cv2.applyColorMap(depth_map_normalized, cv2.COLORMAP_JET)
+    cv2.imshow('Depth Map', depth_map_colored)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
+
 def main():
     # 文件路径
-    pcd_path = '/home/benny/data/dog_origin/gml_2024-11-12-17-25-51/scans.pcd'
-    tum_format_str = "0.009635 0.082915 -0.172141 -0.20300496693110576 -0.6707415974954035 0.6793574265807414 0.2176423206552613"
-    img_path = '/home/benny/data/dog_origin/gml_2024-11-12-17-25-51/_camera_color_image_raw/1731403708_380473375.png'
+    pcd_path = '/home/benny/docker/noetic_container_data/bag/extra/gml_2024-11-12-17-25-51/scans.pcd'
+    tum_format_str = "-3.044872 -1.151392 -0.161102 -0.6167608266250763 0.35245066400291847 -0.33891628823463915 0.6168633250193347"
+    img_path = '/home/benny/docker/noetic_container_data/bag/extra/gml_2024-11-12-17-25-51/_camera_color_image_raw/1731403689_834154129.png'
 
     # 读取点云数据
     points = read_pcd(pcd_path)
@@ -218,12 +257,17 @@ def main():
 
     mask = filter_points_within_fov(u, v, depth, img_shape, fov_horizontal, fov_vertical, points_camera)
     points_in_fov = points_camera[mask]
+    u_f = u[mask]
+    v_f = v[mask]
     print(f"points_in_fov num：{len(points_in_fov)}")
 
     # 可视化点云
     visualize_point_cloud(points_camera, points_in_fov, T_world_to_camera, fov_horizontal, fov_vertical)
     # 可视化结果
-    visualize_points_on_image(points_in_fov, u, v, img_path)
+    visualize_points_on_image(points_in_fov, u_f, v_f, img_path)
+    depth_map = create_depth_map(u_f, v_f, points_in_fov[:, 2], img_shape)
+    # cv2.imwrite('depth_map.png', (depth_map / np.max(depth_map) * 255).astype(np.uint8))
+    display_depth_map(depth_map)
 
 if __name__ == '__main__':
     main()
