@@ -225,51 +225,78 @@ def display_depth_map(depth_map):
     cv2.waitKey(0)
     cv2.destroyAllWindows()
 
+# 从文件中读取雷达位姿
+def read_poses(file_path):
+    poses = []
+    with open(file_path, 'r') as file:
+        for line in file:
+            parts = line.strip().split()
+            if len(parts) == 7:
+                translation = np.array(parts[:3], dtype=float)
+                quaternion = np.array(parts[3:], dtype=float)
+                pose = [translation, quaternion]
+                poses.append(pose)
+    return poses
+
 def main():
-    # 文件路径
-    pcd_path = file_pre_path + file_path + 'scans.pcd'
-    tum_format_str = "-3.044872 -1.151392 -0.161102 -0.6167608266250763 0.35245066400291847 -0.33891628823463915 0.6168633250193347"
-    img_path = file_pre_path + file_path + '_camera_color_image_raw/1731403689_834154129.png'
-
-    # 读取点云数据
-    points = read_pcd(pcd_path)
-
-    # 读取相机位姿
-    T_world_to_camera = read_camera_pose(tum_format_str)
-
-
-
-    # 将点云从雷达坐标系转换到相机坐标系
-    points_camera = transform_points(points, T_world_to_camera)
-
     # 相机内参
     K = np.array([
     [606.160278320312, 0, 433.248992919922],
     [0, 606.088684082031, 254.570159912109],
     [0, 0, 1]
     ])
-
-    # 投影点云到图像平面上
-    u, v, depth = project_points(points_camera, K)
-
     # 筛选出在相机FOV内的点云
     img_shape = (480, 848)  # 图像尺寸
     fov_horizontal = 69.94  # 水平FOV角度
     fov_vertical = 43.18  # 垂直FOV角度
 
-    mask = filter_points_within_fov(u, v, depth, img_shape, fov_horizontal, fov_vertical, points_camera)
-    points_in_fov = points_camera[mask]
-    u_f = u[mask]
-    v_f = v[mask]
-    print(f"points_in_fov num：{len(points_in_fov)}")
+    # 文件路径
+    pcd_path = file_pre_path + file_path + 'scans.pcd'
+    tum_path = file_pre_path + file_path + 'poses.txt'
+    img_path = file_pre_path + file_path + '_camera_color_image_raw/1731403689_834154129.png'
+    store_path = file_pre_path + file_path + 'depth/'
+
+    poses = read_poses(tum_path)
+    # 读取点云数据
+    points = read_pcd(pcd_path)
+
+    for i,pose in enumerate(poses):
+        translation, quaternion = pose
+        rotation = R.from_quat(quaternion).as_matrix()
+        T_world_to_camera = np.eye(4)
+        T_world_to_camera[:3, :3] = rotation
+        T_world_to_camera[:3, 3] = translation
+        # 将点云从雷达坐标系转换到相机坐标系
+        points_camera = transform_points(points, T_world_to_camera)
+
+        # 投影点云到图像平面上
+        u, v, depth = project_points(points_camera, K)
+        mask = filter_points_within_fov(u, v, depth, img_shape, fov_horizontal, fov_vertical, points_camera)
+        points_in_fov = points_camera[mask]
+        u_f = u[mask]
+        v_f = v[mask]
+        depth_map = create_depth_map(u_f, v_f, points_in_fov[:, 2], img_shape)
+
+        new_file_name = f"{i:06}.png"
+        new_file_path = store_path + new_file_name
+        np.save(new_file_path, depth_map)
+        print(f"points_in_fov num：{len(points_in_fov)}  new_file_path:{new_file_path}")
+
+
+
+
+
+
+
+
+
 
     # 可视化点云
-    visualize_point_cloud(points_camera, points_in_fov, T_world_to_camera, fov_horizontal, fov_vertical)
+    # visualize_point_cloud(points_camera, points_in_fov, T_world_to_camera, fov_horizontal, fov_vertical)
     # 可视化结果
-    visualize_points_on_image(points_in_fov, u_f, v_f, img_path)
-    depth_map = create_depth_map(u_f, v_f, points_in_fov[:, 2], img_shape)
+    # visualize_points_on_image(points_in_fov, u_f, v_f, img_path)
     # cv2.imwrite('depth_map.png', (depth_map / np.max(depth_map) * 255).astype(np.uint8))
-    display_depth_map(depth_map)
+    # display_depth_map(depth_map)
 
 if __name__ == '__main__':
     main()
