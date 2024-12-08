@@ -122,8 +122,8 @@ def visualize_point_cloud(points, points_in_fov, T_world_to_camera, fov_horizont
     fov_colors = colormap_jet(fov_z_values)
 
     # 将颜色分配给点云
-    pcd_in_fov.colors = o3d.utility.Vector3dVector(fov_colors)
-    # pcd_in_fov.paint_uniform_color([1, 0, 0])  # 将视野内的点云设为红色
+    # pcd_in_fov.colors = o3d.utility.Vector3dVector(fov_colors)
+    pcd_in_fov.paint_uniform_color([1, 0, 0])  # 将视野内的点云设为红色
 
     # # 获取相机位置
     # camera_position = T_world_to_camera[:3, 3]
@@ -171,7 +171,7 @@ def visualize_point_cloud(points, points_in_fov, T_world_to_camera, fov_horizont
     # 调整点的大小
     vis = o3d.visualization.Visualizer()
     vis.create_window()
-    # vis.add_geometry(pcd)
+    vis.add_geometry(pcd)
     vis.add_geometry(pcd_in_fov)
     # vis.add_geometry(coord_frame)
     vis.add_geometry(line_set)
@@ -238,20 +238,54 @@ def read_poses(file_path):
                 poses.append(pose)
     return poses
 
-def update_global_point_cloud(vis, global_points):
-    if len(global_points) == 0:
+
+def visualize_global_point_cloud(global_pcd):
+    if len(global_pcd.points) == 0:
         print("No points to visualize.")
         return
-
-    pcd = o3d.geometry.PointCloud()
-    pcd.points = o3d.utility.Vector3dVector(global_points)
-    z_values = np.array(global_points)[:, 2]
+    print(f"Number of points: {len(global_pcd.points)}")
+    z_values = np.asarray(global_pcd.points)[:, 2]
     colors = colormap_jet(z_values)
-    pcd.colors = o3d.utility.Vector3dVector(colors)
+    global_pcd.colors = o3d.utility.Vector3dVector(colors)
 
-    vis.clear_geometries()
-    vis.add_geometry(pcd)
-    vis.update_renderer()
+    vis = o3d.visualization.Visualizer()
+    vis.create_window()
+    vis.add_geometry(global_pcd)
+    render_option = vis.get_render_option()
+    render_option.point_size = 0.5
+    vis.run()
+    vis.destroy_window()
+
+def unproject_depth_map(depth_map, K, T_world_to_camera):
+    h, w = depth_map.shape
+
+    # 初始化相机内参矩阵
+    cam_mat = K
+    cam_mat_inv = np.linalg.inv(cam_mat)
+    # 生成网格的x和y坐标
+    y, x = np.meshgrid(np.arange(h), np.arange(w), indexing="ij")
+    # 将x坐标调整为表示像素中心的位置
+    x = x.reshape((1, -1))[:, :]
+    # 将y坐标调整为表示像素中心的位置
+    y = y.reshape((1, -1))[:, :]
+    # 将深度值重塑为一维数组
+    z = depth_map.reshape((1, -1))[:, :]
+
+    # 将x, y坐标和1（表示齐次坐标）堆叠成二维点坐标矩阵p_2d
+    p_2d = np.vstack([x, y, np.ones_like(x)])
+    # 使用相机内参矩阵的逆矩阵将二维点坐标转换为三维点坐标
+    pc = cam_mat_inv @ p_2d
+    # 将三维点坐标的z分量与对应的深度值相乘，得到最终的三维点云坐标
+    pc = pc * z
+    pc_homo = np.vstack([pc, np.ones((1, pc.shape[1]))])
+
+    # T_camera_to_world = np.linalg.inv(T_world_to_camera)
+
+    pc_global_homo = T_world_to_camera @ pc_homo
+
+    return pc_global_homo[:3, :].T, pc.T
+
+
 
 def main():
     # 相机内参
@@ -275,46 +309,34 @@ def main():
     # 读取点云数据
     points = read_pcd(pcd_path)
 
+    global_pcd = o3d.geometry.PointCloud()
 
-    global_points = []
-
-    # 初始化Open3D可视化窗口
-    vis = o3d.visualization.VisualizerWithKeyCallback()
-    vis.create_window()
-    render_option = vis.get_render_option()
-    render_option.point_size = 0.5
-
-    for i,pose in enumerate(poses):
+    for i, pose in enumerate(poses[150:], start=150):
+        if i % 10 != 0:
+            continue
         translation, quaternion = pose
         rotation = R.from_quat(quaternion).as_matrix()
         T_world_to_camera = np.eye(4)
         T_world_to_camera[:3, :3] = rotation
         T_world_to_camera[:3, 3] = translation
-        # 将点云从雷达坐标系转换到相机坐标系
         points_camera = transform_points(points, T_world_to_camera)
-
-        # 投影点云到图像平面上
         u, v, depth = project_points(points_camera, K)
         mask = filter_points_within_fov(u, v, depth, img_shape, fov_horizontal, fov_vertical, points_camera)
         points_in_fov = points_camera[mask]
         u_f = u[mask]
         v_f = v[mask]
         depth_map = create_depth_map(u_f, v_f, points_in_fov[:, 2], img_shape)
-
         new_file_name = f"{i:06}"
         new_file_path = store_path + new_file_name
         np.save(new_file_path, depth_map)
         print(f"points_in_fov num：{len(points_in_fov)}  new_file_path:{new_file_path}")
 
-        # 将当前帧的点云投影到世界坐标系并添加到全局点云中
-        T_camera_to_world = np.linalg.inv(T_world_to_camera)
-        points_world = transform_points(points_in_fov, T_camera_to_world)
-        global_points.extend(points_world)
+        # Unproject depth map to get points in world coordinates
+        points_world, pc = unproject_depth_map(depth_map, K, T_world_to_camera)
+        global_pcd.points.extend(o3d.utility.Vector3dVector(points_world))
 
-        # 更新全局点云并在窗口中显示
-        update_global_point_cloud(vis, global_points)
-
-    vis.destroy_window()
+        if i % 100 == 0:
+            visualize_global_point_cloud(global_pcd)
 
     # 可视化点云
     # visualize_point_cloud(points_camera, points_in_fov, T_world_to_camera, fov_horizontal, fov_vertical)
