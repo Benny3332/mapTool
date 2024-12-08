@@ -238,6 +238,21 @@ def read_poses(file_path):
                 poses.append(pose)
     return poses
 
+def update_global_point_cloud(vis, global_points):
+    if len(global_points) == 0:
+        print("No points to visualize.")
+        return
+
+    pcd = o3d.geometry.PointCloud()
+    pcd.points = o3d.utility.Vector3dVector(global_points)
+    z_values = np.array(global_points)[:, 2]
+    colors = colormap_jet(z_values)
+    pcd.colors = o3d.utility.Vector3dVector(colors)
+
+    vis.clear_geometries()
+    vis.add_geometry(pcd)
+    vis.update_renderer()
+
 def main():
     # 相机内参
     K = np.array([
@@ -260,6 +275,15 @@ def main():
     # 读取点云数据
     points = read_pcd(pcd_path)
 
+
+    global_points = []
+
+    # 初始化Open3D可视化窗口
+    vis = o3d.visualization.VisualizerWithKeyCallback()
+    vis.create_window()
+    render_option = vis.get_render_option()
+    render_option.point_size = 0.5
+
     for i,pose in enumerate(poses):
         translation, quaternion = pose
         rotation = R.from_quat(quaternion).as_matrix()
@@ -277,19 +301,20 @@ def main():
         v_f = v[mask]
         depth_map = create_depth_map(u_f, v_f, points_in_fov[:, 2], img_shape)
 
-        new_file_name = f"{i:06}.png"
+        new_file_name = f"{i:06}"
         new_file_path = store_path + new_file_name
         np.save(new_file_path, depth_map)
         print(f"points_in_fov num：{len(points_in_fov)}  new_file_path:{new_file_path}")
 
+        # 将当前帧的点云投影到世界坐标系并添加到全局点云中
+        T_camera_to_world = np.linalg.inv(T_world_to_camera)
+        points_world = transform_points(points_in_fov, T_camera_to_world)
+        global_points.extend(points_world)
 
+        # 更新全局点云并在窗口中显示
+        update_global_point_cloud(vis, global_points)
 
-
-
-
-
-
-
+    vis.destroy_window()
 
     # 可视化点云
     # visualize_point_cloud(points_camera, points_in_fov, T_world_to_camera, fov_horizontal, fov_vertical)
