@@ -6,6 +6,17 @@ import matplotlib.pyplot as plt
 
 from gmlDogRecordFilePath import file_path,file_pre_path
 
+def visual_voxel(pcd):
+    # 计算Z轴的最大最小值以便归一化
+    z_values = np.array(pcd.points)[:, 2]  # 提取所有点的Z坐标
+    # 应用自定义的热图颜色映射
+    colors = colormap_jet(z_values)
+    # 将颜色分配给点云
+    pcd.colors = o3d.utility.Vector3dVector(colors)
+    voxel_grid = o3d.geometry.VoxelGrid.create_from_point_cloud(pcd, voxel_size=0.05)
+
+    o3d.visualization.draw_geometries([voxel_grid])
+
 def read_pcd(file_path):
     pcd = o3d.io.read_point_cloud(file_path)
     points = np.asarray(pcd.points)
@@ -312,8 +323,8 @@ def main():
     global_pcd = o3d.geometry.PointCloud()
 
     for i, pose in enumerate(poses[150:], start=150):
-        if i % 10 != 0:
-            continue
+        # if i % 10 != 0:
+        #     continue
         translation, quaternion = pose
         rotation = R.from_quat(quaternion).as_matrix()
         T_world_to_camera = np.eye(4)
@@ -328,15 +339,16 @@ def main():
         depth_map = create_depth_map(u_f, v_f, points_in_fov[:, 2], img_shape)
         new_file_name = f"{i:06}"
         new_file_path = store_path + new_file_name
-        np.save(new_file_path, depth_map)
+        # np.save(new_file_path, depth_map)
         print(f"points_in_fov num：{len(points_in_fov)}  new_file_path:{new_file_path}")
 
         # Unproject depth map to get points in world coordinates
         points_world, pc = unproject_depth_map(depth_map, K, T_world_to_camera)
-        global_pcd.points.extend(o3d.utility.Vector3dVector(points_world))
-
-        if i % 100 == 0:
-            visualize_global_point_cloud(global_pcd)
+        # global_pcd.points.extend(o3d.utility.Vector3dVector(points_world))
+        visualize_point_cloud(points, points_world, T_world_to_camera, fov_horizontal, fov_vertical)
+        #
+        # if i % 100 == 0:
+        #     visualize_global_point_cloud(global_pcd)
 
     # 可视化点云
     # visualize_point_cloud(points_camera, points_in_fov, T_world_to_camera, fov_horizontal, fov_vertical)
