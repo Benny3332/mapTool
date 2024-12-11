@@ -7,21 +7,22 @@ import matplotlib.pyplot as plt
 from gmlDogRecordFilePath import file_path,file_pre_path
 
 def visual_voxel(pcd):
+    pc = o3d.geometry.PointCloud()
+    # 将NumPy数组设置为新的点云对象的点
+    pc.points = o3d.utility.Vector3dVector(pcd)
     # 计算Z轴的最大最小值以便归一化
-    z_values = np.array(pcd.points)[:, 2]  # 提取所有点的Z坐标
+    z_values = np.array(pc.points)[:, 2]  # 提取所有点的Z坐标
     # 应用自定义的热图颜色映射
     colors = colormap_jet(z_values)
     # 将颜色分配给点云
-    pcd.colors = o3d.utility.Vector3dVector(colors)
-    voxel_grid = o3d.geometry.VoxelGrid.create_from_point_cloud(pcd, voxel_size=0.05)
-
+    pc.colors = o3d.utility.Vector3dVector(colors)
+    voxel_grid = o3d.geometry.VoxelGrid.create_from_point_cloud(pc, voxel_size=0.02)
     o3d.visualization.draw_geometries([voxel_grid])
 
 def read_pcd(file_path):
     pcd = o3d.io.read_point_cloud(file_path)
     points = np.asarray(pcd.points)
     return points
-
 
 def read_camera_pose(tum_format_str):
     data = tum_format_str.split()
@@ -32,7 +33,6 @@ def read_camera_pose(tum_format_str):
     T_world_to_camera[:3, :3] = rotation
     T_world_to_camera[:3, 3] = translation
     return T_world_to_camera
-
 
 def transform_points(points, T_world_to_camera):
     # 计算从世界坐标系到雷达坐标系的变换矩阵
@@ -48,11 +48,9 @@ def transform_points(points, T_world_to_camera):
     points_camera = points_camera[:3, :].T
     mask = points_camera[:, 2] >= 0
     filtered_points_camera = points_camera[mask]
-
     # filter too far point
     mask_2 = filtered_points_camera[:, 2] <= 9
     filtered_points_camera = filtered_points_camera[mask_2]
-
     return filtered_points_camera
 
 
@@ -60,21 +58,16 @@ def project_points(points_camera, K):
     # 将相机坐标系下的点投影到图像平面上
     # K 是相机的内参矩阵，points_camera.T 是点的转置，因为通常期望点的坐标是 (N, 3) 形状，而内参矩阵与 (3, N) 形状的数组相乘
     points_projected = K @ points_camera.T
-
     # 将投影后的点从齐次坐标转换为非齐次坐标
     # 通过除以第三维（深度信息）来实现
     points_projected = points_projected / points_projected[2, :]
-
     # 提取投影点的 x 坐标（图像上的 u 坐标）
     u = points_projected[0, :]
-
     # 提取投影点的 y 坐标（图像上的 v 坐标）
     v = points_projected[1, :]
-
     # 提取原始相机坐标系下点的深度信息
     # 注意：这里的深度信息并未经过投影变换，仍然是相机坐标系下的深度
     depth = points_camera[:, 2]
-
     # 返回投影点的 u, v 坐标和原始深度信息
     return u, v, depth
 
@@ -84,19 +77,15 @@ def filter_points_within_fov(u, v, depth, img_shape, fov_horizontal, fov_vertica
     height, width = img_shape
     half_fov_horizontal = np.deg2rad(fov_horizontal / 2)
     half_fov_vertical = np.deg2rad(fov_vertical / 2)
-
     # 提取相机坐标系下的 x, y 坐标
     x_camera = points_camera[:, 0]
     y_camera = points_camera[:, 1]
-
     max_x = np.tan(half_fov_horizontal) * depth
     min_x = -max_x
     max_y = np.tan(half_fov_vertical) * depth
     min_y = -max_y
-
     mask = (u >= 0) & (u < width) & (v >= 0) & (v < height) & \
            (x_camera >= min_x) & (x_camera <= max_x) & (y_camera >= min_y) & (y_camera <= max_y)
-
     return mask
 
 # 应用热力图颜色映射
@@ -112,41 +101,31 @@ def visualize_point_cloud(points, points_in_fov, T_world_to_camera, fov_horizont
     # 创建点云并设置点
     pcd = o3d.geometry.PointCloud()
     pcd.points = o3d.utility.Vector3dVector(points)
-
     # 计算Z轴的最大最小值以便归一化
     z_values = np.array(points)[:, 2]  # 提取所有点的Z坐标
-
     # 应用自定义的热图颜色映射
     colors = colormap_jet(z_values)
-
     # 将颜色分配给点云
     pcd.colors = o3d.utility.Vector3dVector(colors)
-
     # 设置视野内的点云
     pcd_in_fov = o3d.geometry.PointCloud()
     pcd_in_fov.points = o3d.utility.Vector3dVector(points_in_fov)
-
     # 计算Z轴的最大最小值以便归一化
     fov_z_values = np.array(points)[:, 2]  # 提取所有点的Z坐标
-
     # 应用自定义的热图颜色映射
     fov_colors = colormap_jet(fov_z_values)
-
     # 将颜色分配给点云
     # pcd_in_fov.colors = o3d.utility.Vector3dVector(fov_colors)
     pcd_in_fov.paint_uniform_color([1, 0, 0])  # 将视野内的点云设为红色
-
     # # 获取相机位置
     # camera_position = T_world_to_camera[:3, 3]
     #
     # # 创建相机坐标系
     # coord_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=0.5)
     # coord_frame.transform(T_world_to_camera)
-
     # 计算FOV边界
     half_fov_horizontal_rad = np.deg2rad(fov_horizontal / 2)
     half_fov_vertical_rad = np.deg2rad(fov_vertical / 2)
-
     # FOV边界点计算（假设距离为1）
     points_fov = [
         [np.tan(half_fov_horizontal_rad),
@@ -162,23 +141,18 @@ def visualize_point_cloud(points, points_in_fov, T_world_to_camera, fov_horizont
          -np.tan(half_fov_vertical_rad),
          1]
     ]
-
     # 转换到世界坐标系
     # points_fov = np.dot(T_world_to_camera[:3, :3], np.array(points_fov).T).T + camera_position
-
     # 创建FOV边框线
     lines = [[0, 1], [1, 3], [3, 2], [2, 0]]
     line_set = o3d.geometry.LineSet(
         points=o3d.utility.Vector3dVector(points_fov),
         lines=o3d.utility.Vector2iVector(lines)
     )
-
     # 设置颜色
     line_set.paint_uniform_color([1, 0, 0])
-
     # 创建全局坐标系
     global_coord_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(size=1.0)
-
     # 调整点的大小
     vis = o3d.visualization.Visualizer()
     vis.create_window()
@@ -198,18 +172,14 @@ def visualize_points_on_image(points_in_fov, u, v, img_path):
         return
     # 计算Z轴的最大最小值以便归一化
     fov_z_values = np.array(points_in_fov)[:, 2]  # 提取所有点的Z坐标
-
     # 应用自定义的热图颜色映射
     colors = colormap_jet(fov_z_values)
-
     # 由于colors是NumPy数组，我们可以直接使用它而无需再次转换
     colors_bgr = (colors * 255).astype(np.uint8)[:, ::-1]  # 一次性转换所有颜色到BGR并取整
-
     for i in range(len(points_in_fov)):
         # 直接使用转换后的BGR颜色
         if i % 40 == 0:
             cv2.rectangle(img, (int(u[i]), int(v[i])), (int(u[i]) + 1, int(v[i]) + 1), colors_bgr[i].tolist(), -1)
-
     cv2.imshow('Points on Image', img)
     cv2.waitKey(0)
     cv2.destroyAllWindows()
@@ -218,10 +188,8 @@ def create_depth_map(u, v, depth, img_shape):
     depth_map = np.full(img_shape, np.inf, dtype=np.float32)
     u_valid = u.astype(int)
     v_valid = v.astype(int)
-
     # 更新depth_map中有效索引位置的深度值为当前值与depth_valid中的较小值
     depth_map[v_valid, u_valid] = np.minimum(depth_map[v_valid, u_valid], depth)
-
     # 将depth_map中仍为无穷大的值设置为0，表示这些位置的深度是未知的或无效的
     depth_map[depth_map == np.inf] = 0
 
@@ -322,7 +290,7 @@ def main():
 
     global_pcd = o3d.geometry.PointCloud()
 
-    for i, pose in enumerate(poses[150:], start=150):
+    for i, pose in enumerate(poses[1775:], start=1775):
         # if i % 10 != 0:
         #     continue
         translation, quaternion = pose
@@ -331,9 +299,12 @@ def main():
         T_world_to_camera[:3, :3] = rotation
         T_world_to_camera[:3, 3] = translation
         points_camera = transform_points(points, T_world_to_camera)
+
         u, v, depth = project_points(points_camera, K)
         mask = filter_points_within_fov(u, v, depth, img_shape, fov_horizontal, fov_vertical, points_camera)
         points_in_fov = points_camera[mask]
+        visual_voxel(points_in_fov)
+
         u_f = u[mask]
         v_f = v[mask]
         depth_map = create_depth_map(u_f, v_f, points_in_fov[:, 2], img_shape)
