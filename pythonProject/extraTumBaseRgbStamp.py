@@ -2,7 +2,7 @@ import os
 import re
 from pathlib import Path
 import bisect
-from gmlDogRecordFilePath import file_path
+from gmlDogRecordFilePath import file_path,file_pre_path
 
 
 class PoseData:
@@ -53,7 +53,7 @@ def main():
     print("This is extra RGB TUM function")
     # file_name = "gml_2024-11-05-14-49-29"
     file_name = file_path
-    base_dir = "/media/benny/bennyMove/data/dog_origin/"
+    base_dir = file_pre_path
 
     dir_path = os.path.join(base_dir, file_name, "_camera_color_image_raw")
     pose_file_path = os.path.join(base_dir, file_name, "pose_200hz.txt")

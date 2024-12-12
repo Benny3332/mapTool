@@ -1,7 +1,7 @@
 import os
 from pathlib import Path
 import shutil
-from gmlDogRecordFilePath import file_path
+from gmlDogRecordFilePath import file_path,file_pre_path
 
 def get_png_filenames(dir_path):
     file_names = []
@@ -22,7 +22,7 @@ def main():
     file_name = file_path
     is_rgb = True
 
-    base_dir = "/media/benny/bennyMove/data/dog_origin/"
+    base_dir = file_pre_path
 
     dir_path, tran_path = ('', '')
 

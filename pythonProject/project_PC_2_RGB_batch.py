@@ -2,10 +2,10 @@ import numpy as np
 import cupy as cp
 import open3d as o3d
 import cv2
-from numba import jit
-from tqdm import tqdm
+# from numba import jit
 from scipy.spatial.transform import Rotation as R
 import matplotlib.pyplot as plt
+from concurrent.futures import ProcessPoolExecutor
 
 from gmlDogRecordFilePath import file_path,file_pre_path
 
@@ -245,40 +245,6 @@ def create_depth_map(u, v, depth, img_shape, K, voxel_size):
     depth_map[depth_map == np.inf] = 0
 
     return depth_map
-@jit(fastmath=True, parallel=True)
-def create_depth_map_gpu(u, v, depth, img_shape, K, voxel_size):
-    depth_map = np.full(img_shape, np.inf, dtype=np.float32)
-    fx, fy = K[0, 0], K[1, 1]
-    cx, cy = K[0, 2], K[1, 2]
-
-    u_valid = np.round(u).astype(np.int32)
-    v_valid = np.round(v).astype(np.int32)
-
-    # 遍历每个有效的 u 和 v 坐标
-    for i in range(len(u_valid)):
-        z = depth[i]  # 获取当前点的深度值
-
-        # 计算当前点对应的体素在图像平面上的投影宽度和高度的一半
-        dx = (voxel_size * fx / z) / 2
-        dy = (voxel_size * fy / z) / 2
-
-        # 计算膨胀区域的边界
-        left = max(0, int(round(u_valid[i] - dx)))
-        right = min(img_shape[1] - 1, int(round(u_valid[i] + dx)))
-        top = max(0, int(round(v_valid[i] - dy)))
-        bottom = min(img_shape[0] - 1, int(round(v_valid[i] + dy)))
-
-        # 更新膨胀区域内的深度值为当前深度值与原有深度值中的较小值
-        for row in range(top, bottom + 1):
-            for col in range(left, right + 1):
-                if 0 <= row < img_shape[0] and 0 <= col < img_shape[1]:
-                    depth_map[row, col] = min(depth_map[row, col], z)
-
-    # 将深度图中仍为无穷大的像素值设为 0，表示这些像素没有有效的深度值
-    depth_map[depth_map == np.inf] = 0
-
-    return depth_map
-
 
 def display_depth_map(depth_map):
     depth_map_normalized = (depth_map / np.max(depth_map) * 255).astype(np.uint8)
@@ -337,6 +303,73 @@ def unproject_depth_map(depth_map, K, T_world_to_camera):
 
     return pc_global_homo[:3, :].T, pc.T
 
+# @jit(fastmath=True, parallel=True)
+def create_depth_map_gpu(u, v, depth, img_shape, K, voxel_size):
+    depth_map = np.full(img_shape, np.inf, dtype=np.float32)
+    fx, fy = K[0, 0], K[1, 1]
+    cx, cy = K[0, 2], K[1, 2]
+
+    u_valid = np.round(u).astype(np.int32)
+    v_valid = np.round(v).astype(np.int32)
+
+    # 遍历每个有效的 u 和 v 坐标
+    for i in range(len(u_valid)):
+        z = depth[i]  # 获取当前点的深度值
+
+        # 计算当前点对应的体素在图像平面上的投影宽度和高度的一半
+        dx = (voxel_size * fx / z) / 2
+        dy = (voxel_size * fy / z) / 2
+
+        # 计算膨胀区域的边界
+        left = max(0, int(round(u_valid[i] - dx)))
+        right = min(img_shape[1] - 1, int(round(u_valid[i] + dx)))
+        top = max(0, int(round(v_valid[i] - dy)))
+        bottom = min(img_shape[0] - 1, int(round(v_valid[i] + dy)))
+
+        # 更新膨胀区域内的深度值为当前深度值与原有深度值中的较小值
+        for row in range(top, bottom + 1):
+            for col in range(left, right + 1):
+                if 0 <= row < img_shape[0] and 0 <= col < img_shape[1]:
+                    depth_map[row, col] = min(depth_map[row, col], z)
+
+    # 将深度图中仍为无穷大的像素值设为 0，表示这些像素没有有效的深度值
+    depth_map[depth_map == np.inf] = 0
+
+    return depth_map
+
+def create_and_save_depth(K, fov_horizontal, fov_vertical, img_shape, points, poses, start_index, store_path, voxel_size):
+    for i, pose in enumerate(poses):
+        index = start_index + i
+        translation, quaternion = pose
+        rotation = R.from_quat(quaternion).as_matrix()
+        T_world_to_camera = np.eye(4)
+        T_world_to_camera[:3, :3] = rotation
+        T_world_to_camera[:3, 3] = translation
+        points_camera = transform_points(points, T_world_to_camera)
+
+        u, v, depth = project_points(points_camera, K)
+        mask = filter_points_within_fov(u, v, depth, img_shape, fov_horizontal, fov_vertical, points_camera)
+        points_in_fov = points_camera[mask]
+
+        u_f = u[mask]
+        v_f = v[mask]
+        depth_map = create_depth_map(u_f, v_f, points_in_fov[:, 2], img_shape, K, voxel_size)
+        new_file_name = f"{index:06}"
+        new_file_path = store_path + new_file_name
+        np.save(new_file_path, depth_map)
+        print(f"points_in_fov num：{len(points_in_fov)}  new_file_path:{new_file_path}")
+
+        # Unproject depth map to get points in world coordinates
+        # points_world, pc = unproject_depth_map(depth_map, K, T_world_to_camera)
+        # global_pcd.points.extend(o3d.utility.Vector3dVector(points_world))
+        # visualize_point_cloud(points, points_world, T_world_to_camera, fov_horizontal, fov_vertical)
+        #     visualize_global_point_cloud(global_pcd)
+
+def process_pose_chunk(args):
+    K, fov_horizontal, fov_vertical, img_shape, points, poses, start_index, store_path, voxel_size = args
+    print(f"Processing chunk starting at index {start_index} with {len(poses)} poses.")
+    create_and_save_depth(K, fov_horizontal, fov_vertical, img_shape, points, poses, start_index, store_path, voxel_size)
+
 def main():
     # 相机内参
     K = np.array([
@@ -349,6 +382,7 @@ def main():
     fov_horizontal = 69.94  # 水平FOV角度
     fov_vertical = 43.18  # 垂直FOV角度
     voxel_size = 0.01
+    chunk_size = 150
     # 文件路径
     pcd_path = file_pre_path + file_path + 'scans.pcd'
     tum_path = file_pre_path + file_path + 'poses.txt'
@@ -361,41 +395,35 @@ def main():
 
     voxel_grid = o3d.geometry.VoxelGrid.create_from_point_cloud(points, voxel_size=voxel_size)
     points = get_voxels_center(voxel_grid)
-    # global_pcd = o3d.geometry.PointCloud()
+    # 拆分 poses 列表
+    pose_chunks = []
+    start_indices = []
+    for i in range(0, len(poses), chunk_size):
+        pose_chunks.append(poses[i:i + chunk_size])
+        start_indices.append(i)
 
-    for i, pose in enumerate(poses[2258:],start=2258):
-        # if i % 10 != 0:
-        #     continue
-        translation, quaternion = pose
-        rotation = R.from_quat(quaternion).as_matrix()
-        T_world_to_camera = np.eye(4)
-        T_world_to_camera[:3, :3] = rotation
-        T_world_to_camera[:3, 3] = translation
-        points_camera = transform_points_gpu(points, T_world_to_camera)
+    print(f"Number of pose chunks: {len(pose_chunks)}")
+    print(f"Start indices: {start_indices}")
+    if not pose_chunks or not start_indices:
+        print("No pose chunks to process.")
+        return
 
-        u, v, depth = project_points(points_camera, K)
-        mask = filter_points_within_fov(u, v, depth, img_shape, fov_horizontal, fov_vertical, points_camera)
-        points_in_fov = points_camera[mask]
-        # visual_voxel(points_in_fov)
+    print("Starting ThreadPoolExecutor...")
+    with ProcessPoolExecutor(max_workers=16) as executor:
+        default_num_threads = executor._max_workers
+        print(f"ThreadPoolExecutor is using {default_num_threads} threads by default.")
+        futures = executor.map(process_pose_chunk, [
+            (K, fov_horizontal, fov_vertical, img_shape, points, pose_chunk, start_index, store_path, voxel_size) for
+            pose_chunk, start_index in zip(pose_chunks, start_indices)])
+    print("ThreadPoolExecutor finished.")
 
-        u_f = u[mask]
-        v_f = v[mask]
-        depth_map = create_depth_map_gpu(u_f, v_f, points_in_fov[:, 2], img_shape, K, voxel_size)
-        new_file_name = f"{i:06}"
-        new_file_path = store_path + new_file_name
-        np.save(new_file_path, depth_map)
-        print(f"points_in_fov num：{len(points_in_fov)}  new_file_path:{new_file_path}")
 
-        # Unproject depth map to get points in world coordinates
-        # points_world, pc = unproject_depth_map(depth_map, K, T_world_to_camera)
-        # global_pcd.points.extend(o3d.utility.Vector3dVector(points_world))
-        # visualize_point_cloud(points, points_world, T_world_to_camera, fov_horizontal, fov_vertical)
-        #
-        # if i % 100 == 0:
-        #     visualize_global_point_cloud(global_pcd)
-
-    # 可视化结果
+# 可视化结果
     # visualize_points_on_image(points_in_fov, u_f, v_f, img_path)
+
+
+
+
 
 if __name__ == '__main__':
     main()
