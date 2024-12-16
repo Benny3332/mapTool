@@ -125,7 +125,7 @@ def visual_voxel(pcd):
     colors = colormap_jet(z_values)
     # 将颜色分配给点云
     pc.colors = o3d.utility.Vector3dVector(colors)
-    voxel_grid = o3d.geometry.VoxelGrid.create_from_point_cloud(pc, voxel_size=0.02)
+    voxel_grid = o3d.geometry.VoxelGrid.create_from_point_cloud(pc, voxel_size=0.5)
     o3d.visualization.draw_geometries([voxel_grid])
 
 def read_pcd(file_path):
@@ -157,7 +157,12 @@ def transform_points(points, T_world_to_camera):
     points_camera = points_camera[:3, :].T
     mask = points_camera[:, 2] >= 0
     filtered_points_camera = points_camera[mask]
-    return filtered_points_camera
+    original_indices = np.arange(points.shape[0])[mask]
+
+    mask_far = filtered_points_camera[:, 2] < 8
+    filtered_points_camera_near = filtered_points_camera[mask_far]
+    original_indices_near = original_indices[mask_far]
+    return filtered_points_camera_near, original_indices_near
 
 
 def transform_points_gpu(points, T_world_to_camera):
@@ -257,9 +262,10 @@ def create_depth_map(u, v, depth, img_shape, K, voxel_size):
     return depth_map
 
 
-@jit(fastmath=True, parallel=True)
-def create_depth_map_gpu(u, v, depth, img_shape, K, voxel_size):
+@jit(fastmath=True, parallel=True, nopython=True)
+def create_depth_map_gpu(u, v, depth, img_shape, K, voxel_size, point_indices):
     depth_map = np.full(img_shape, np.inf, dtype=np.float32)
+    index_map = np.full(img_shape, -1, dtype=np.int32)
     fx, fy = K[0, 0], K[1, 1]
     cx, cy = K[0, 2], K[1, 2]
 
@@ -284,12 +290,17 @@ def create_depth_map_gpu(u, v, depth, img_shape, K, voxel_size):
         for row in range(top, bottom + 1):
             for col in range(left, right + 1):
                 if 0 <= row < img_shape[0] and 0 <= col < img_shape[1]:
-                    depth_map[row, col] = min(depth_map[row, col], z)
+                    if z < depth_map[row, col]:  # 只有当 z 更小时才更新
+                        depth_map[row, col] = z
+                        index_map[row, col] = point_indices[i]
 
     # 将深度图中仍为无穷大的像素值设为 0，表示这些像素没有有效的深度值
-    depth_map[depth_map == np.inf] = 0
+    for row in range(img_shape[0]):
+        for col in range(img_shape[1]):
+            if depth_map[row, col] == np.inf:
+                depth_map[row, col] = 0
 
-    return depth_map
+    return depth_map, index_map
 
 
 def display_depth_map(depth_map):
@@ -316,8 +327,11 @@ def get_voxels_center(voxel_grid):
     # 提取体素中心坐标
     voxels = voxel_grid.get_voxels()
     voxel_indices = np.array([voxel.grid_index for voxel in voxels])
+    grid_max = np.max(voxel_indices, axis=0)
+    grid_min = np.min(voxel_indices, axis=0)
+    grid_size = np.ceil((grid_max - grid_min) + 1).astype(int)
     voxel_centers = voxel_indices * voxel_grid.voxel_size + voxel_grid.origin
-    return np.array(voxel_centers)
+    return np.array(voxel_centers), voxel_indices
 
 
 def unproject_depth_map(depth_map, K, T_world_to_camera):
@@ -360,36 +374,40 @@ def main():
     img_shape = (480, 848)  # 图像尺寸
     fov_horizontal = 69.94  # 水平FOV角度
     fov_vertical = 43.18  # 垂直FOV角度
-    voxel_size = 0.01
+    voxel_size = 0.5
     # 文件路径
     pcd_path = file_pre_path + file_path + 'scans.pcd'
     tum_path = file_pre_path + file_path + 'poses.txt'
     img_path = file_pre_path + file_path + '_camera_color_image_raw/1731403689_834154129.png'
     store_path = file_pre_path + file_path + 'depth/'
-    tum_format_str = "-2.066022 -0.54483 -0.178137 0.601057461830838 -0.38572060023028787 0.3678690915492112 -0.5955013665964297"
+    tum_format_str = "-3.045702 -1.148452 -0.160874 -0.6158456484752547 0.352947575314004 -0.33729760742508824 0.6183789051700982"
     poses = read_poses(tum_path)
     # 读取点云数据
     points = read_pcd(pcd_path)
 
     voxel_grid = o3d.geometry.VoxelGrid.create_from_point_cloud(points, voxel_size=voxel_size)
-    points = get_voxels_center(voxel_grid)
+    points, voxel_indices = get_voxels_center(voxel_grid)
     # global_pcd = o3d.geometry.PointCloud()
     # if i % 10 != 0:
     #     continue
     T_world_to_camera = read_camera_pose(tum_format_str)
 
-    points_camera = transform_points_gpu(points, T_world_to_camera)
+    points_camera, original_indices = transform_points(points, T_world_to_camera)
 
     u, v, depth = project_points(points_camera, K)
     mask = filter_points_within_fov(u, v, depth, img_shape, fov_horizontal, fov_vertical, points_camera)
     points_in_fov = points_camera[mask]
+    original_indices_in_fov = original_indices[mask]
     # visual_voxel(points_in_fov)
+    visual_voxel(points_in_fov)
 
     u_f = u[mask]
     v_f = v[mask]
-    depth_map = create_depth_map_gpu(u_f, v_f, points_in_fov[:, 2], img_shape, K, voxel_size)
-    display_depth_map(depth_map)
+    depth_map, index_map = create_depth_map_gpu(u_f, v_f, points_in_fov[:, 2], img_shape, K, voxel_size, original_indices_in_fov)
+    # display_depth_map(depth_map)
     print(f"points_in_fov num：{len(points_in_fov)} ")
+    display_depth_map(depth_map)
+    # base_index_map_create_depth_map(T_world_to_camera, depth_map, img_shape, index_map, points)
 
     # Unproject depth map to get points in world coordinates
     # points_world, pc = unproject_depth_map(depth_map, K, T_world_to_camera)
@@ -401,6 +419,44 @@ def main():
 
     # 可视化结果
     # visualize_points_on_image(points_in_fov, u_f, v_f, img_path)
+
+
+def base_index_map_create_depth_map(T_world_to_camera, depth_map, img_shape, index_map, points):
+    # 根据index_map从原始点云中提取点，并保留对应的索引
+    extracted_points = []
+    extracted_indices = []
+    for row in range(img_shape[0]):
+        for col in range(img_shape[1]):
+            idx = index_map[row, col]
+            if idx != -1:
+                extracted_points.append(points[idx])
+                extracted_indices.append(idx)
+    extracted_points = np.array(extracted_points)
+    extracted_indices = np.array(extracted_indices)
+    # 将提取的点转换回相机坐标系
+    points_camera_from_index_map, _ = transform_points(extracted_points, T_world_to_camera)
+    # 提取转换后的点的深度信息
+    depths_from_index_map = points_camera_from_index_map[:, 2]
+    # 创建一个与img_shape相同的零数组来存储depths_from_index_map
+    depths_from_index_map_full = np.zeros(img_shape, dtype=np.float32)
+    # 使用extracted_indices来填充depths_from_index_map_full
+    for i, idx in enumerate(extracted_indices):
+        row, col = np.where(index_map == idx)
+        if len(row) > 0 and len(col) > 0:
+            depths_from_index_map_full[row[0], col[0]] = depths_from_index_map[i]
+
+    def normalize_depth_map(depth_map):
+        depth_map_normalized = (depth_map / np.max(depth_map) * 255).astype(np.uint8)
+        return cv2.applyColorMap(depth_map_normalized, cv2.COLORMAP_JET)
+
+    depth_map_colored = normalize_depth_map(depth_map)
+    depths_from_index_map_colored = normalize_depth_map(depths_from_index_map_full)
+    # 水平拼接两张图片
+    combined_image = np.hstack((depth_map_colored, depths_from_index_map_colored))
+    cv2.imshow('Depth Maps', combined_image)
+    cv2.waitKey(0)
+    cv2.destroyAllWindows()
+
 
 if __name__ == '__main__':
     main()

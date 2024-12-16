@@ -2,7 +2,7 @@ import numpy as np
 import cupy as cp
 import open3d as o3d
 import cv2
-# from numba import jit
+from numba import jit
 from scipy.spatial.transform import Rotation as R
 import matplotlib.pyplot as plt
 from concurrent.futures import ProcessPoolExecutor
@@ -157,7 +157,8 @@ def transform_points(points, T_world_to_camera):
     points_camera = points_camera[:3, :].T
     mask = points_camera[:, 2] >= 0
     filtered_points_camera = points_camera[mask]
-    return filtered_points_camera
+    original_indices = np.arange(points.shape[0])[mask]
+    return filtered_points_camera, original_indices
 
 
 def transform_points_gpu(points, T_world_to_camera):
@@ -303,9 +304,10 @@ def unproject_depth_map(depth_map, K, T_world_to_camera):
 
     return pc_global_homo[:3, :].T, pc.T
 
-# @jit(fastmath=True, parallel=True)
-def create_depth_map_gpu(u, v, depth, img_shape, K, voxel_size):
+@jit(fastmath=True, parallel=True, nopython=True)
+def create_depth_map_gpu(u, v, depth, img_shape, K, voxel_size, point_indices):
     depth_map = np.full(img_shape, np.inf, dtype=np.float32)
+    index_map = np.full(img_shape, -1, dtype=np.int32)
     fx, fy = K[0, 0], K[1, 1]
     cx, cy = K[0, 2], K[1, 2]
 
@@ -330,12 +332,16 @@ def create_depth_map_gpu(u, v, depth, img_shape, K, voxel_size):
         for row in range(top, bottom + 1):
             for col in range(left, right + 1):
                 if 0 <= row < img_shape[0] and 0 <= col < img_shape[1]:
-                    depth_map[row, col] = min(depth_map[row, col], z)
-
+                    if z < depth_map[row, col]:  # 只有当 z 更小时才更新
+                        depth_map[row, col] = z
+                        index_map[row, col] = point_indices[i]
     # 将深度图中仍为无穷大的像素值设为 0，表示这些像素没有有效的深度值
-    depth_map[depth_map == np.inf] = 0
+    for row in range(img_shape[0]):
+        for col in range(img_shape[1]):
+            if depth_map[row, col] == np.inf:
+                depth_map[row, col] = 0
 
-    return depth_map
+    return depth_map, index_map
 
 def create_and_save_depth(K, fov_horizontal, fov_vertical, img_shape, points, poses, start_index, store_path, voxel_size):
     for i, pose in enumerate(poses):
@@ -345,15 +351,16 @@ def create_and_save_depth(K, fov_horizontal, fov_vertical, img_shape, points, po
         T_world_to_camera = np.eye(4)
         T_world_to_camera[:3, :3] = rotation
         T_world_to_camera[:3, 3] = translation
-        points_camera = transform_points(points, T_world_to_camera)
+        points_camera, original_indices = transform_points(points, T_world_to_camera)
 
         u, v, depth = project_points(points_camera, K)
         mask = filter_points_within_fov(u, v, depth, img_shape, fov_horizontal, fov_vertical, points_camera)
         points_in_fov = points_camera[mask]
+        original_indices_in_fov = original_indices[mask]
 
         u_f = u[mask]
         v_f = v[mask]
-        depth_map = create_depth_map(u_f, v_f, points_in_fov[:, 2], img_shape, K, voxel_size)
+        depth_map, index_map = create_depth_map_gpu(u_f, v_f, points_in_fov[:, 2], img_shape, K, voxel_size, original_indices_in_fov)
         new_file_name = f"{index:06}"
         new_file_path = store_path + new_file_name
         np.save(new_file_path, depth_map)
@@ -387,7 +394,7 @@ def main():
     pcd_path = file_pre_path + file_path + 'scans.pcd'
     tum_path = file_pre_path + file_path + 'poses.txt'
     img_path = file_pre_path + file_path + '_camera_color_image_raw/1731403689_834154129.png'
-    store_path = file_pre_path + file_path + 'depth/'
+    store_path = file_pre_path + file_path + 'depth_1/'
 
     poses = read_poses(tum_path)
     # 读取点云数据
@@ -409,7 +416,7 @@ def main():
         return
 
     print("Starting ThreadPoolExecutor...")
-    with ProcessPoolExecutor(max_workers=16) as executor:
+    with ProcessPoolExecutor(max_workers=4) as executor:
         default_num_threads = executor._max_workers
         print(f"ThreadPoolExecutor is using {default_num_threads} threads by default.")
         futures = executor.map(process_pose_chunk, [
