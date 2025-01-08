@@ -125,7 +125,7 @@ def visual_voxel(pcd):
     colors = colormap_jet(z_values)
     # 将颜色分配给点云
     pc.colors = o3d.utility.Vector3dVector(colors)
-    voxel_grid = o3d.geometry.VoxelGrid.create_from_point_cloud(pc, voxel_size=0.5)
+    voxel_grid = o3d.geometry.VoxelGrid.create_from_point_cloud(pc, voxel_size=0.05)
     o3d.visualization.draw_geometries([voxel_grid])
 
 def read_pcd(file_path):
@@ -384,6 +384,8 @@ def main():
     poses = read_poses(tum_path)
     # 读取点云数据
     points = read_pcd(pcd_path)
+
+    visual_voxel(points)
 
     voxel_grid = o3d.geometry.VoxelGrid.create_from_point_cloud(points, voxel_size=voxel_size)
     points, voxel_indices = get_voxels_center(voxel_grid)
