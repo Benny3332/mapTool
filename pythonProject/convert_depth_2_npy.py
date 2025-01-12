@@ -30,7 +30,7 @@ def process_depth_images(file_path, store_path):
             depth_array = np.array(img, dtype=np.float32)
 
             # 去除所有大于3000的深度值
-            depth_array[depth_array > 3000] = 0  # 或者可以选择其他处理方式，如设置为NaN
+            depth_array[depth_array > 6000] = 0  # 或者可以选择其他处理方式，如设置为NaN
 
             # 将单位从毫米转换为米
             depth_array /= 1000.0

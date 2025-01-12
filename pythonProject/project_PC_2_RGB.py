@@ -385,7 +385,7 @@ def main():
     # 读取点云数据
     points = read_pcd(pcd_path)
 
-    visual_voxel(points)
+    # visual_voxel(points)
 
     voxel_grid = o3d.geometry.VoxelGrid.create_from_point_cloud(points, voxel_size=voxel_size)
     points, voxel_indices = get_voxels_center(voxel_grid)
@@ -401,7 +401,7 @@ def main():
     points_in_fov = points_camera[mask]
     original_indices_in_fov = original_indices[mask]
     # visual_voxel(points_in_fov)
-    visual_voxel(points_in_fov)
+    # visual_voxel(points_in_fov)
 
     u_f = u[mask]
     v_f = v[mask]

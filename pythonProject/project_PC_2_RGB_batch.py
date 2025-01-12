@@ -402,6 +402,7 @@ def main():
 
     voxel_grid = o3d.geometry.VoxelGrid.create_from_point_cloud(points, voxel_size=voxel_size)
     points = get_voxels_center(voxel_grid)
+    print(f"pcd_path: {pcd_path} poses num: {len(poses)}  points num: {len(points)}")
     # 拆分 poses 列表
     pose_chunks = []
     start_indices = []
