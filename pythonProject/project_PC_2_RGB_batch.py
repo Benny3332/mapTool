@@ -6,6 +6,7 @@ from numba import jit
 from scipy.spatial.transform import Rotation as R
 import matplotlib.pyplot as plt
 from concurrent.futures import ProcessPoolExecutor
+import os
 
 from gmlDogRecordFilePath import file_path,file_pre_path
 
@@ -145,14 +146,14 @@ def read_camera_pose(tum_format_str):
 
 def transform_points(points, T_world_to_camera):
     # 计算从世界坐标系到雷达坐标系的变换矩阵
-    T_radar_to_world = np.linalg.inv(T_world_to_camera)
+    # T_radar_to_world = np.linalg.inv(T_world_to_camera)
     # 将点坐标转换为齐次坐标
     # 在每个点的坐标后添加一个值为1的列，以进行齐次变换
     points_homogeneous = np.column_stack((points, np.ones(points.shape[0])))
     # 使用齐次变换矩阵将点从雷达坐标系变换到相机坐标系
     # 注意：这里应该是 T_radar_to_camera，但根据函数名和参数，我们假设这里的逻辑是正确的，
     # 即使用 T_world_to_camera 的逆矩阵将点从世界坐标系（可能是雷达坐标系）变换到相机坐标系
-    points_camera = T_radar_to_world @ points_homogeneous.T
+    points_camera = T_world_to_camera @ points_homogeneous.T
     # 提取变换后的点的三维坐标（忽略齐次坐标的第四维）
     points_camera = points_camera[:3, :].T
     mask = points_camera[:, 2] >= 0
@@ -380,8 +381,8 @@ def process_pose_chunk(args):
 def main():
     # 相机内参
     K = np.array([
-    [606.160278320312, 0, 433.248992919922],
-    [0, 606.088684082031, 254.570159912109],
+    [604.5459594726562, 0, 432.69287109375],
+    [0, 604.0941772460938, 254.2894287109375],
     [0, 0, 1]
     ])
     # 筛选出在相机FOV内的点云
@@ -393,9 +394,8 @@ def main():
     # 文件路径
     pcd_path = file_pre_path + file_path + 'scans.pcd'
     tum_path = file_pre_path + file_path + 'poses.txt'
-    img_path = file_pre_path + file_path + '_camera_color_image_raw/1731403689_834154129.png'
     store_path = file_pre_path + file_path + 'depth_1/'
-
+    os.makedirs(store_path, exist_ok=True)
     poses = read_poses(tum_path)
     # 读取点云数据
     points = read_pcd(pcd_path)

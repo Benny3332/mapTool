@@ -9,22 +9,13 @@ from gmlDogRecordFilePath import file_path
 from gmlDogRecordFilePath import file_pre_path
 
 # 转换矩阵
-
-#ld revise
+# ld 20250123
 tr_matrix_lidar_2_depth = np.array([
     [0.0232266, -0.999284, 0.0298772, 0.0297088],
     [0.280359, -0.0221751, -0.969636, -0.176122],
     [0.959611, 0.0306658, 0.279653, -0.226056],
     [0, 0, 0, 1]
 ])
-
-# ld 20250123
-# tr_matrix_lidar_2_depth = np.array([
-#     [0.0232266, -0.999284, 0.0298772, 0.0297088],
-#     [0.280359, -0.0221751, -0.969636, -0.176122],
-#     [0.959611, 0.0306658, 0.279653, -0.226056],
-#     [0, 0, 0, 1]
-# ])
 
 # second
 # tr_matrix_lidar_2_depth = np.array([
@@ -86,11 +77,10 @@ def transform_poses(poses, tr_matrix):
         ori_tr = np.eye(4)
         ori_tr[:3, :3] = ori_rotation_matrix
         ori_tr[:3, 3] = translation
-        ori_tr_inv = np.linalg.inv(ori_tr)
-        tr_camera = tr_matrix @ ori_tr_inv
-        tr_rotation = R.from_matrix(tr_camera[:3, :3])
-        tr_quaternion = tr_rotation.as_quat()
-        # tr_quaternion = rot2quaternion(tr_rotation)
+
+        tr_camera =   ori_tr @ tr_matrix
+        tr_rotation = tr_camera[:3, :3]
+        tr_quaternion = rot2quaternion(tr_rotation)
         tr_translate = tr_camera[:3, 3]
         new_pose = [tr_translate, tr_quaternion]
         transformed_poses.append(new_pose)
@@ -102,7 +92,7 @@ def write_poses(poses, store_path):
     with open(store_path, 'w') as file:
         for pose in poses:
             translation, quaternion = pose
-            combined = list(translation.flatten()) + list(quaternion.flatten())
+            combined = list(translation.flatten()) + quaternion
             # 将旋转矩阵（现在是平展的）和平移向量写回一行
             line = ' '.join(map(str, combined))
             file.write(line + '\n')
@@ -113,7 +103,7 @@ if __name__ == '__main__':
     file_name = 'pose_mid_360.txt'
     base_path = file_pre_path
     poses_path = base_path + folder_name + file_name
-    store_path = base_path + folder_name + 'poses.txt'
+    store_path = base_path + folder_name + 'poses_camera.txt'
     print("file full path：" + base_path + folder_name)
     # 读取雷达位姿
     poses = read_poses(poses_path)
@@ -124,11 +114,13 @@ if __name__ == '__main__':
 
 
     # 转换位姿 mid_360_2_depth
-    transformed_poses = transform_poses(poses, tr_matrix_lidar_2_depth)
+    # transformed_poses = transform_poses(poses, tr_matrix_lidar_2_depth)
 
-    # tr_inv = np.linalg.inv(tr_matrix_lidar_2_depth)
-    # rot_change = R.from_euler('XYZ', [-90, 90, 0], degrees=True).as_matrix()
-    # transformed_poses = transform_poses(transformed_poses, tr_inv[:3, :3], tr_inv[:3, 3])
+    rot_change = R.from_euler('ZYX', [-88.4511812, -1.9905506, -74.046185], degrees=True).as_matrix()
+    tr_test = np.eye(4)
+    tr_test[:3, :3] = rot_change
+
+    transformed_poses = transform_poses(poses, tr_test)
 
 
     # 写入文件
