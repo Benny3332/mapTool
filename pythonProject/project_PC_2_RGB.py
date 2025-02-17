@@ -8,19 +8,13 @@ import matplotlib.pyplot as plt
 
 from gmlDogRecordFilePath import file_path,file_pre_path
 
-# tr_matrix_lidar_2_depth = np.array([
-#     [0.0270124,  0.2756647,  0.9608743, 0.0297088],
-#     [-0.9990314, -0.0259554,  0.0355314, -0.176122],
-#     [0.0347347, -0.9609034,  0.2746966, -0.226056],
-#     [0, 0, 0, 1]])
-
 #ld revise
 tr_matrix_lidar_2_depth = np.array([
-    [0.0232266, -0.999284, 0.0298772, 0.0297088],
-    [0.280359, -0.0221751, -0.969636, -0.176122],
-    [0.959611, 0.0306658, 0.279653, -0.226056],
-    [0, 0, 0, 1]
-])
+    [0.0270124,  0.2756647,  0.9608743, 0.0297088],
+    [-0.9990314, -0.0259554,  0.0355314, -0.06],
+    [0.0347347, -0.9609034,  0.2746966, -0.045],
+    [0, 0, 0, 1]])
+
 
 #ld
 # tr_matrix_lidar_2_depth = np.array([
@@ -184,7 +178,8 @@ def read_and_tran_camera_pose(tum_format_str):
     ori_tr[:3, 3] = translation
     ori_tr_inv = np.linalg.inv(ori_tr)
     tr_matrix = tr_matrix_lidar_2_depth
-    T_world_to_camera = tr_matrix @ ori_tr_inv
+    tr_matrix_inv = np.linalg.inv(tr_matrix)
+    T_world_to_camera = tr_matrix_inv @ ori_tr_inv
 
     tr_rotation = R.from_matrix(T_world_to_camera[:3, :3])
     tr_quaternion = tr_rotation.as_quat()
@@ -192,13 +187,13 @@ def read_and_tran_camera_pose(tum_format_str):
     tr_translate = T_world_to_camera[:3, 3]
     new_pose = [tr_translate, tr_quaternion]
     print(new_pose)
-    return T_world_to_camera
+    return T_world_to_camera, ori_tr_inv
 
 def transform_points(points, T_world_to_camera):
     points_homogeneous = np.column_stack((points, np.ones(points.shape[0])))
     T_world_to_camera_inv = np.linalg.inv(T_world_to_camera)
     # points_camera = tr_matrix_lidar_2_depth @ T_radar_to_world @ points_homogeneous.T
-    points_camera = T_world_to_camera @ points_homogeneous.T
+    points_camera = T_world_to_camera_inv @ points_homogeneous.T
     points_camera = points_camera[:3, :].T
     mask = points_camera[:, 2] >= 0
     filtered_points_camera = points_camera[mask]
@@ -423,7 +418,7 @@ def main():
     pcd_path = file_pre_path + file_path + 'scans.pcd'
     # pcd_path = file_pre_path + file_path + '_livox_lidar/1737357392_600268602.pcd'
     # tum_path = file_pre_path + file_path + 'poses.txt'
-    img_path = file_pre_path + file_path + '_camera_color_image_raw/1737357422_241411924.png'
+    img_path = file_pre_path + file_path + '_camera_color_image_raw/1737357466_673074007.png'
     # pcd_path = '/media/benny/GML_FLOOR7/2025-1-21/pcd/1.pcd'
     # img_path = '/media/benny/GML_FLOOR7/2025-1-21/IMG/1.jpg'
     # store_path = file_pre_path + file_path + 'depth/'

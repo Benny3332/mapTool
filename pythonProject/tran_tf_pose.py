@@ -9,36 +9,13 @@ from gmlDogRecordFilePath import file_path
 from gmlDogRecordFilePath import file_pre_path
 
 # 转换矩阵
-# ld 20250123
+#ld revise
 tr_matrix_lidar_2_depth = np.array([
-    [0.0232266, -0.999284, 0.0298772, 0.0297088],
-    [0.280359, -0.0221751, -0.969636, -0.176122],
-    [0.959611, 0.0306658, 0.279653, -0.226056],
-    [0, 0, 0, 1]
-])
+    [0.0270124,  0.2756647,  0.9608743, 0.0297088],
+    [-0.9990314, -0.0259554,  0.0355314, -0.06],
+    [0.0347347, -0.9609034,  0.2746966, -0.045],
+    [0, 0, 0, 1]])
 
-# second
-# tr_matrix_lidar_2_depth = np.array([
-#     [-0.0252995, -0.999668, 0.00479095, 0.025508],
-#     [-0.0283215, -0.00407382, -0.999591, -0.106692],
-#     [0.999279, -0.0254248, -0.028209, -0.224522],
-#     [0, 0, 0, 1]
-# ])
-
-# base_first fine adj
-# tr_matrix_lidar_2_depth = np.array([
-#     [-0.0347702, -0.999329, -0.0115237, 0.103479],
-#     [0.0359214, 0.0102735, -0.999302, 0.006314],
-#     [0.99875, -0.0351599, 0.0355401, -0.23212184],
-#     [0, 0, 0, 1]
-# ])
-# first
-# tr_matrix_lidar_2_depth = np.array([
-#     [-0.0347702, -0.999329, -0.0115237, -0.113479],
-#     [0.0359214, 0.0102735, -0.999302, 0.216314],
-#     [0.99875, -0.0351599, 0.0355401, 0.00212184],
-#     [0, 0, 0, 1]
-# ])
 # mm
 tr_imu_2_lidar =np.array([11,23.29,-44.12])
 # 四元数转旋转矩阵
@@ -77,10 +54,12 @@ def transform_poses(poses, tr_matrix):
         ori_tr = np.eye(4)
         ori_tr[:3, :3] = ori_rotation_matrix
         ori_tr[:3, 3] = translation
+        ori_tr_inv = np.linalg.inv(ori_tr)
+        tr_matrix_inv = np.linalg.inv(tr_matrix)
 
-        tr_camera =   ori_tr @ tr_matrix
-        tr_rotation = tr_camera[:3, :3]
-        tr_quaternion = rot2quaternion(tr_rotation)
+        tr_camera =  ori_tr @ tr_matrix
+        tr_rotation = R.from_matrix(tr_camera[:3, :3])
+        tr_quaternion = tr_rotation.as_quat()
         tr_translate = tr_camera[:3, 3]
         new_pose = [tr_translate, tr_quaternion]
         transformed_poses.append(new_pose)
@@ -92,7 +71,7 @@ def write_poses(poses, store_path):
     with open(store_path, 'w') as file:
         for pose in poses:
             translation, quaternion = pose
-            combined = list(translation.flatten()) + quaternion
+            combined = list(translation.flatten()) + list(quaternion.flatten())
             # 将旋转矩阵（现在是平展的）和平移向量写回一行
             line = ' '.join(map(str, combined))
             file.write(line + '\n')
@@ -108,19 +87,7 @@ if __name__ == '__main__':
     # 读取雷达位姿
     poses = read_poses(poses_path)
 
-    # 转换位姿 imu_2_lidar
-    # tr_imu_2_lidar_m = tr_imu_2_lidar / 1000
-    # transformed_poses = transform_poses(poses, np.eye(3), tr_imu_2_lidar_m.reshape(-1, 1))
-
-
-    # 转换位姿 mid_360_2_depth
-    # transformed_poses = transform_poses(poses, tr_matrix_lidar_2_depth)
-
-    rot_change = R.from_euler('ZYX', [-88.4511812, -1.9905506, -74.046185], degrees=True).as_matrix()
-    tr_test = np.eye(4)
-    tr_test[:3, :3] = rot_change
-
-    transformed_poses = transform_poses(poses, tr_test)
+    transformed_poses = transform_poses(poses, tr_matrix_lidar_2_depth)
 
 
     # 写入文件
