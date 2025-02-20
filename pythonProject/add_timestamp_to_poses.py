@@ -28,7 +28,10 @@ def prepend_timestamps(poses_path, stamp_path, store_path):
 
 if __name__ == '__main__':
     folder_name = file_path
-    file_name = 'poses.txt'
+    # file_name = 'poses.txt'
+
+    file_name = 'poses_camera.txt'
+
     base_path = file_pre_path
     print("file full path：" + base_path + folder_name)
     poses_path = base_path + folder_name + file_name

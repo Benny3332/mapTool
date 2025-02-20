@@ -92,7 +92,7 @@ def main():
 
     depth_sample_rate = int(100)
 
-    file_full_path = '/home/benny/docker/data/gml_2025-01-20-15-16-32'
+    file_full_path = '/home/benny/docker/noetic_container_data/bag/extra/gml_2025-01-20-15-16-32'
     data_dir = Path(file_full_path)
     depth_paths_dir = data_dir / "depth_1"
     depth_paths = sorted(depth_paths_dir.glob("*.npy"))

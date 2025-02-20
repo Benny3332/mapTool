@@ -1,15 +1,19 @@
 import numpy as np
 import matplotlib.pyplot as plt
+import cv2
 import matplotlib.cm as cm
 from PIL import Image
-
+from gmlDogRecordFilePath import file_path, file_pre_path
 # file_path = "/home/benny/conda/MattHabitat/vlmaps_dataset/5LpN3gDmAk7_1/depth/000333.npy"
-file_name = "000801"
-folder_name = 'gml_2024-10-15-19-38-50/'
-my_base_path = '/media/benny/bennyMove/data/dog_origin/'
+file_name = "000643"
+folder_name = file_path
+my_base_path = file_pre_path
 
-depth_file_path = my_base_path + folder_name + f"depth/{file_name}.npy"
+depth_file_path = my_base_path + folder_name + f"depth_1/{file_name}.npy"
 rgb_file_path = my_base_path + folder_name + f"rgb/{file_name}.png"
+file_full_path = '/home/benny/docker/data/gml_2025-01-20-15-16-32/'
+# depth_file_path =file_full_path + f"depth_1/{file_name}.npy"
+# rgb_file_path = file_full_path + f"rgb/{file_name}.png"
 data = np.load(depth_file_path)
 rgb_image = np.array(Image.open(rgb_file_path))
 
@@ -33,6 +37,12 @@ def show_depth_npy():
     print(f"max depth is {data.max()}, min depth is {data.min()}")
 
     max_depth = np.max(data)  # 获取最大深度值
+    # 归一化深度图并应用颜色映射
+    depth_map_normalized = (data / max_depth * 255).astype(np.uint8)
+    depth_map_colored = cv2.applyColorMap(depth_map_normalized, cv2.COLORMAP_JET)
+
+    # 转换彩色深度图为RGB格式以便在matplotlib中显示
+    depth_map_colored_rgb = cv2.cvtColor(depth_map_colored, cv2.COLOR_BGR2RGB)
     # if max_depth > 0:
     #     normalized_data = data / max_depth  # 归一化
     # else:
@@ -43,7 +53,7 @@ def show_depth_npy():
 
     # 创建一个图形和轴
     # fig, ax = plt.subplots()
-    im1 = ax1.imshow(data, cmap='gray')
+    im1 = ax1.imshow(depth_map_colored_rgb)
     ax1.axis('off')
     ax1.set_title('Depth Map')
 

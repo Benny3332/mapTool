@@ -159,7 +159,10 @@ def transform_points(points, T_world_to_camera):
     mask = points_camera[:, 2] >= 0
     filtered_points_camera = points_camera[mask]
     original_indices = np.arange(points.shape[0])[mask]
-    return filtered_points_camera, original_indices
+    mask_far = filtered_points_camera[:, 2] < 5
+    filtered_points_camera_near = filtered_points_camera[mask_far]
+    original_indices_near = original_indices[mask_far]
+    return filtered_points_camera_near, original_indices_near
 
 
 def transform_points_gpu(points, T_world_to_camera):
@@ -341,7 +344,10 @@ def create_depth_map_gpu(u, v, depth, img_shape, K, voxel_size, point_indices):
         for col in range(img_shape[1]):
             if depth_map[row, col] == np.inf:
                 depth_map[row, col] = 0
-
+    for row in range(img_shape[0]):
+        for col in range(img_shape[1]):
+            if depth_map[row, col] < 1.5:
+                depth_map[row, col] = 0
     return depth_map, index_map
 
 def create_and_save_depth(K, fov_horizontal, fov_vertical, img_shape, points, poses, start_index, store_path, voxel_size):
@@ -390,7 +396,7 @@ def main():
     fov_horizontal = 69.94  # 水平FOV角度
     fov_vertical = 43.18  # 垂直FOV角度
     voxel_size = 0.01
-    chunk_size = 150
+    chunk_size = 15
     # 文件路径
     pcd_path = file_pre_path + file_path + 'scans.pcd'
     tum_path = file_pre_path + file_path + 'poses.txt'
@@ -417,7 +423,7 @@ def main():
         return
 
     print("Starting ThreadPoolExecutor...")
-    with ProcessPoolExecutor(max_workers=4) as executor:
+    with ProcessPoolExecutor(max_workers=100) as executor:
         default_num_threads = executor._max_workers
         print(f"ThreadPoolExecutor is using {default_num_threads} threads by default.")
         futures = executor.map(process_pose_chunk, [

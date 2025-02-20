@@ -39,8 +39,9 @@ def show_single_pcd():
 def show_vlmaps_create_result():
     global pcd
     # map_path = file_pre_path + file_path + "vlmaps_cam.h5df"
+    map_path = "/home/benny/docker/data/collect_tran/i820250120floor5small/vlmap_cam/vlmaps_cam.h5df"
     # map_path = "/home/benny/fsdownload/vlmaps_cam_lidarDepth.h5df"
-    map_path = file_pre_path + file_path + "vlmaps_cam_lidarDepth.h5df"
+    # map_path = file_pre_path + file_path + "vlmaps_cam_lidarDepth.h5df"
     with h5py.File(map_path, "r") as f:
         mapped_iter_list = f["mapped_iter_list"][:].tolist()
         grid_feat = f["grid_feat"][:]
@@ -52,7 +53,7 @@ def show_vlmaps_create_result():
         pcd_max = f["pcd_max"][:]
         cs = f["cs"][()]
     grid_height = grid_pos[:, 2] * 0.05
-    grid_height_mask = np.logical_and(grid_height > 0, grid_height < 2.3)
+    grid_height_mask = np.logical_and(grid_height > 0, grid_height < 3.5)
     grid_pos = grid_pos[grid_height_mask, :]
     rgb = grid_rgb[grid_height_mask, :]
     rgb = rgb / 255.0
