@@ -9,42 +9,17 @@ from gmlDogRecordFilePath import file_path, file_pre_path
 # 转化成格式为float32 的numpy 二维数组
 # 并保存到store_path 中
 
-def calculate_perspective_transform_matrix(depth_fov_x, depth_fov_y, rgb_fov_x, rgb_fov_y, image_shape):
-    height, width = image_shape
-
-    # Calculate focal lengths for both cameras
-    fx_depth = width / (2 * np.tan(np.deg2rad(depth_fov_x) / 2))
-    fy_depth = height / (2 * np.tan(np.deg2rad(depth_fov_y) / 2))
-
-    fx_rgb = width / (2 * np.tan(np.deg2rad(rgb_fov_x) / 2))
-    fy_rgb = height / (2 * np.tan(np.deg2rad(rgb_fov_y) / 2))
-
-    # Define intrinsic matrices for both cameras
-    K_depth = np.array([[fx_depth, 0, width / 2],
-                        [0, fy_depth, height / 2],
-                        [0, 0, 1]])
-
-    K_rgb = np.array([[fx_rgb, 0, width / 2],
-                      [0, fy_rgb, height / 2],
-                      [0, 0, 1]])
-
-    # Assume no rotation between the two cameras, only a change in focal length
-    R = np.eye(3)
-
+def calculate_perspective_transform_matrix(K_depth, K_rgb):
     # Compute the perspective transform matrix
-    P_depth = K_depth @ R
-    P_rgb = K_rgb @ R
-
-    H = P_rgb @ np.linalg.inv(P_depth)
-
+    H = K_rgb @ np.linalg.inv(K_depth)
     return H
 
-def process_depth_images(file_path, store_path, depth_fov_x, depth_fov_y, rgb_fov_x, rgb_fov_y, image_shape):
+def process_depth_images(file_path, store_path, K_depth, K_rgb, image_shape):
     # 确保输出目录存在
     os.makedirs(store_path, exist_ok=True)
 
     # 计算透视变换矩阵
-    H = calculate_perspective_transform_matrix(depth_fov_x, depth_fov_y, rgb_fov_x, rgb_fov_y, image_shape)
+    H = calculate_perspective_transform_matrix(K_depth, K_rgb)
 
     # 遍历file_path中的所有.png文件
     for filename in os.listdir(file_path):
@@ -59,7 +34,7 @@ def process_depth_images(file_path, store_path, depth_fov_x, depth_fov_y, rgb_fo
             depth_array = np.array(img, dtype=np.float32)
 
             # 去除所有大于3000的深度值
-            depth_array[depth_array > 3000] = 0  # 设置为0或其他处理方式
+            depth_array[depth_array > 4500] = 0  # 设置为0或其他处理方式
 
             # 将单位从毫米转换为米
             depth_array /= 1000.0
@@ -81,14 +56,23 @@ if __name__ == "__main__":
     file_path = base_path + folder_name + 'depth_png/'
     store_path = base_path + folder_name + 'depth_aligned/'
 
-    # FOV values and image shape
-    depth_fov_x = 89.79
-    depth_fov_y = 58.84
-    rgb_fov_x = 70.08
-    rgb_fov_y = 43.31
-    image_shape = (848, 480)
+    # 内参矩阵
+    K_depth = np.array([
+        [425.571807861328, 0, 425.977661132812],
+        [0, 425.571807861328, 241.062408447266],
+        [0, 0, 1]
+    ])
 
-    process_depth_images(file_path, store_path, depth_fov_x, depth_fov_y, rgb_fov_x, rgb_fov_y, image_shape)
+    K_rgb = np.array([
+        [604.545959472656, 0, 432.69287109375],
+        [0, 604.094177246094, 254.289428710938],
+        [0, 0, 1]
+    ])
+
+    # 图像形状
+    image_shape = (484, 848)
+
+    process_depth_images(file_path, store_path, K_depth, K_rgb, image_shape)
 
 
 
