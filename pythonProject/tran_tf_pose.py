@@ -10,12 +10,19 @@ from gmlDogRecordFilePath import file_pre_path
 
 # 转换矩阵
 
-# cjs revise
+# cjs revise depth_floor5_small
 tr_matrix_lidar_2_depth = np.array([
     [0.0236432,  0.2727882,  0.9617836, 0.0297088],
-    [-0.9994875, -0.0143159,  0.0286304, -0.01],
-    [0.0215788, -0.9619676,  0.2723099, 0.2],
+    [-0.9994875, -0.0143159,  0.0286304, -0.105938],
+    [0.0215788, -0.9619676,  0.2723099, -0.326056],
     [0, 0, 0, 1]])
+
+# cjs revise rgb_floor5_small
+# tr_matrix_lidar_2_depth = np.array([
+#     [0.0236432,  0.2727882,  0.9617836, 0.0297088],
+#     [-0.9994875, -0.0143159,  0.0286304, -0.01],
+#     [0.0215788, -0.9619676,  0.2723099, 0.2],
+#     [0, 0, 0, 1]])
 
 #ld revise
 # tr_matrix_lidar_2_depth = np.array([
@@ -25,7 +32,7 @@ tr_matrix_lidar_2_depth = np.array([
 #     [0, 0, 0, 1]])
 
 # mm
-tr_imu_2_lidar =np.array([11,23.29,-44.12])
+tr_imu_2_lidar = np.array([11,23.29,-44.12])
 # 四元数转旋转矩阵
 def quaternion2rot(quaternion):
     r = R.from_quat(quaternion) # 顺序为 (x, y, z, w)
