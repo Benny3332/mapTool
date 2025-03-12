@@ -9,7 +9,7 @@ file_name = "000000"
 folder_name = file_path
 my_base_path = file_pre_path
 
-depth_file_path = my_base_path + folder_name + f"depth/{file_name}.npy"
+depth_file_path = my_base_path + folder_name + f"depth_aligned/{file_name}.npy"
 rgb_file_path = my_base_path + folder_name + f"rgb/{file_name}.png"
 # file_full_path = '/home/benny/docker/data/gml_2025-01-20-15-16-32/'
 # depth_file_path =file_full_path + f"depth_aligned/{file_name}.npy"
