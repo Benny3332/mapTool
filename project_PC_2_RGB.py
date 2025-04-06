@@ -8,12 +8,25 @@ import matplotlib.pyplot as plt
 
 from gmlDogRecordFilePath import file_path,file_pre_path
 
-# cjs revise
+# new application function
 tr_matrix_lidar_2_depth = np.array([
-    [0.0236432,  0.2727882,  0.9617836, 0.0297088],
-    [-0.9994875, -0.0143159,  0.0286304, -0.01],
-    [0.0215788, -0.9619676,  0.2723099, 0.2],
-    [0, 0, 0, 1]])
+    [-1.00799236e-02,  3.41871575e-01,  9.39692621e-01, 1.545999999999999978e-02],
+    [-9.99949194e-01, -3.37640348e-03, -9.49790910e-03, 5.539000000000000173e-02],
+    [-7.42837030e-05, -9.39740617e-01,  3.41888239e-01, 1.501099999999999934e-01],
+    [0.000000000000000000e+00, 0.000000000000000000e+00, 0.000000000000000000e+00, 1.000000000000000000e+00]])
+
+tr_matrix_lidar_2_dog = np.array([
+    [0.93912, -0.00685, 0.34352, 0.00000],
+    [0.00000, 0.99980, 0.01994, 0.00000],
+    [-0.34359, -0.01873, 0.93893, 0.00000],
+    [0.000000000000000000e+00, 0.000000000000000000e+00, 0.000000000000000000e+00, 1.000000000000000000e+00]])
+
+# cjs revise
+# tr_matrix_lidar_2_depth = np.array([
+#     [0.0236432,  0.2727882,  0.9617836, 0.0297088],
+#     [-0.9994875, -0.0143159,  0.0286304, -0.01],
+#     [0.0215788, -0.9619676,  0.2723099, 0.2],
+#     [0, 0, 0, 1]])
 
 #ld revise
 # tr_matrix_lidar_2_depth = np.array([
@@ -175,7 +188,7 @@ def read_camera_pose(tum_format_str):
     T_world_to_camera[:3, 3] = translation
     return T_world_to_camera
 
-def read_and_tran_camera_pose(tum_format_str):
+def read_and_tran_camera_pose(tum_format_str, tr_matrix):
     data = tum_format_str.split()
     translation = np.array([float(data[0]), float(data[1]), float(data[2])])
     quaternion = np.array([float(data[3]), float(data[4]), float(data[5]), float(data[6])])
@@ -184,7 +197,7 @@ def read_and_tran_camera_pose(tum_format_str):
     ori_tr[:3, :3] = ori_rotation_matrix
     ori_tr[:3, 3] = translation
     ori_tr_inv = np.linalg.inv(ori_tr)
-    tr_matrix = tr_matrix_lidar_2_depth
+    # tr_matrix = tr_matrix_lidar_2_depth
     tr_matrix_inv = np.linalg.inv(tr_matrix)
     T_world_to_camera = ori_tr @ tr_matrix
 
@@ -196,6 +209,29 @@ def read_and_tran_camera_pose(tum_format_str):
     print(new_pose)
     return T_world_to_camera, ori_tr_inv
 
+def read_and_tran_lidar_pose_2(tum_format_str, tr_matrix_lidar_2_dog, tr_matrix_lidar_2_camera):
+    data = tum_format_str.split()
+    translation = np.array([float(data[0]), float(data[1]), float(data[2])])
+    quaternion = np.array([float(data[3]), float(data[4]), float(data[5]), float(data[6])])
+    ori_rotation_matrix = R.from_quat(quaternion).as_matrix()
+    ori_tr = np.eye(4)
+    ori_tr[:3, :3] = ori_rotation_matrix
+    ori_tr[:3, 3] = translation
+    # ori_tr_inv = np.linalg.inv(ori_tr)
+    # tr_matrix_inv = np.linalg.inv(tr_matrix)
+    # T_world_to_camera = ori_tr @ tr_matrix
+    # tr_matrix_lidar_2_camera_inv = np.linalg.inv(tr_matrix_lidar_2_camera)
+    tr_matrix_lidar_2_camera_inv = np.linalg.inv(tr_matrix_lidar_2_camera)
+    T_world_to_camera = ori_tr @ tr_matrix_lidar_2_dog @ tr_matrix_lidar_2_camera
+
+    tr_rotation = R.from_matrix(T_world_to_camera[:3, :3])
+    tr_quaternion = tr_rotation.as_quat()
+    # tr_quaternion = rot2quaternion(tr_rotation)
+    tr_translate = T_world_to_camera[:3, 3]
+    new_pose = [tr_translate, tr_quaternion]
+    print(new_pose)
+    return T_world_to_camera
+
 def transform_points(points, T_world_to_camera):
     points_homogeneous = np.column_stack((points, np.ones(points.shape[0])))
     T_world_to_camera_inv = np.linalg.inv(T_world_to_camera)
@@ -205,7 +241,7 @@ def transform_points(points, T_world_to_camera):
     mask = points_camera[:, 2] >= 0
     filtered_points_camera = points_camera[mask]
     original_indices = np.arange(points.shape[0])[mask]
-    mask_far = filtered_points_camera[:, 2] < 7.5
+    mask_far = filtered_points_camera[:, 2] < 9.5
     filtered_points_camera_near = filtered_points_camera[mask_far]
     original_indices_near = original_indices[mask_far]
     return filtered_points_camera_near, original_indices_near
@@ -412,63 +448,6 @@ def unproject_depth_map(depth_map, K, T_world_to_camera):
 
     return pc_global_homo[:3, :].T, pc.T
 
-def main():
-    # 相机内参
-    K = np.array([
-    [604.5459594726562, 0, 432.69287109375],
-    [0, 604.0941772460938, 254.2894287109375],
-    [0, 0, 1]
-    ])
-    # 筛选出在相机FOV内的点云
-    img_shape = (480, 848)  # 图像尺寸
-    fov_horizontal = 69.94  # 水平FOV角度
-    fov_vertical = 43.18  # 垂直FOV角度
-    voxel_size = 0.05
-    # 文件路径
-    pcd_path = file_pre_path + file_path + 'scans.pcd'
-    # pcd_path = file_pre_path + file_path + '_livox_lidar/1737357392_600268602.pcd'
-    # tum_path = file_pre_path + file_path + 'poses.txt'
-    img_path = file_pre_path + file_path + '_camera_color_image_raw/1737357415_573735237.png'
-    # pcd_path = '/media/benny/GML_FLOOR7/2025-1-21/pcd/1.pcd'
-    # img_path = '/media/benny/GML_FLOOR7/2025-1-21/IMG/1.jpg'
-    # store_path = file_pre_path + file_path + 'depth/'
-    tum_format_str = "1.824007511 4.121863842 -0.101321153 0.006132359 0.006593411 0.222078398 0.974987209"
-    # poses = read_poses(tum_path)
-    # 读取点云数据
-    points = read_pcd(pcd_path)
-
-    voxel_grid = o3d.geometry.VoxelGrid.create_from_point_cloud(points, voxel_size=voxel_size)
-    points, voxel_indices = get_voxels_center(voxel_grid)
-
-    # no tran
-    # T_world_to_camera = read_camera_pose(tum_format_str)
-
-    # with tran
-    T_world_to_camera, ori_tr_inv = read_and_tran_camera_pose(tum_format_str)
-
-
-    points_camera, original_indices = transform_points(points, T_world_to_camera)
-    # visual_voxel(points_camera)
-
-    u, v, depth = project_points(points_camera, K)
-    mask = filter_points_within_fov(u, v, depth, img_shape, fov_horizontal, fov_vertical, points_camera)
-    points_in_fov = points_camera[mask]
-    original_indices_in_fov = original_indices[mask]
-    # visual_voxel(points_in_fov)
-
-    u_f = u[mask]
-    v_f = v[mask]
-    depth_map, index_map = create_depth_map_gpu(u_f, v_f, points_in_fov[:, 2], img_shape, K, voxel_size, original_indices_in_fov)
-    # display_depth_map(depth_map)
-    print(f"points_in_fov num：{len(points_in_fov)} ")
-
-    filtered_pc_camera, u_ft, v_ft, depth = get_depth_point(T_world_to_camera, index_map, points, K)
-    # visual_voxel(points_in_fov)
-    visual_voxel(filtered_pc_camera)
-    # 可视化结果
-    visualize_points_on_image(filtered_pc_camera, u_ft, v_ft, img_path)
-
-
 def get_depth_point(T_world_to_camera, index_map, points, K):
     # 提取所有非负的有效索引
     valid_indices = np.unique(index_map[index_map >= 0])
@@ -491,6 +470,67 @@ def get_depth_point(T_world_to_camera, index_map, points, K):
     depth = filtered_pc_camera[:, 2]
 
     return filtered_pc_camera, u, v, depth
+
+def main():
+    # 相机内参
+    K = np.array([
+    [604.5459594726562, 0, 432.69287109375],
+    [0, 604.0941772460938, 254.2894287109375],
+    [0, 0, 1]
+    ])
+    # 筛选出在相机FOV内的点云
+    img_shape = (480, 848)  # 图像尺寸
+    fov_horizontal = 70.08  # 水平FOV角度
+    fov_vertical = 43.31  # 垂直FOV角度
+    voxel_size = 0.05
+    # 文件路径
+    pcd_path = file_pre_path + file_path + 'scans.pcd'
+    # pcd_path = file_pre_path + file_path + '_livox_lidar/1737357392_600268602.pcd'
+    # tum_path = file_pre_path + file_path + 'poses.txt'
+    img_path = file_pre_path + file_path + '_camera_color_image_raw/1743498555_062030792.png'
+    # pcd_path = '/media/benny/GML_FLOOR7/2025-1-21/pcd/1.pcd'
+    # img_path = '/media/benny/GML_FLOOR7/2025-1-21/IMG/1.jpg'
+    # store_path = file_pre_path + file_path + 'depth/'
+    tum_format_str = "5.965400696 -1.297876477 2.146819592 0.248787075 0.022817513 -0.721599042 0.645661831"
+    # poses = read_poses(tum_path)
+    # 读取点云数据
+    points = read_pcd(pcd_path)
+
+    voxel_grid = o3d.geometry.VoxelGrid.create_from_point_cloud(points, voxel_size=voxel_size)
+    points, voxel_indices = get_voxels_center(voxel_grid)
+
+    # no tran
+    # T_world_to_camera = read_camera_pose(tum_format_str)
+
+
+    # with tran lidar to camera
+    T_world_to_camera, ori_tr_inv = read_and_tran_camera_pose(tum_format_str, tr_matrix_lidar_2_depth)
+    # T_world_to_camera = read_and_tran_lidar_pose_2(tum_format_str, tr_matrix_lidar_2_dog, tr_matrix_lidar_2_depth)
+
+
+    points_camera, original_indices = transform_points(points, T_world_to_camera)
+    visual_voxel(points_camera)
+
+    u, v, depth = project_points(points_camera, K)
+    mask = filter_points_within_fov(u, v, depth, img_shape, fov_horizontal, fov_vertical, points_camera)
+    points_in_fov = points_camera[mask]
+    original_indices_in_fov = original_indices[mask]
+    # visual_voxel(points_in_fov)
+
+    u_f = u[mask]
+    v_f = v[mask]
+    depth_map, index_map = create_depth_map_gpu(u_f, v_f, points_in_fov[:, 2], img_shape, K, voxel_size, original_indices_in_fov)
+    # display_depth_map(depth_map)
+    print(f"points_in_fov num：{len(points_in_fov)} ")
+
+    filtered_pc_camera, u_ft, v_ft, depth = get_depth_point(T_world_to_camera, index_map, points, K)
+    # visual_voxel(points_in_fov)
+    visual_voxel(filtered_pc_camera)
+    # 可视化结果
+    visualize_points_on_image(filtered_pc_camera, u_ft, v_ft, img_path)
+
+
+
 
 
 # def base_index_map_create_depth_map(T_world_to_camera, depth_map, img_shape, index_map, points):
