@@ -5,16 +5,18 @@ import matplotlib.cm as cm
 from PIL import Image
 from gmlDogRecordFilePath import file_path, file_pre_path
 # file_path = "/home/benny/conda/MattHabitat/vlmaps_dataset/5LpN3gDmAk7_1/depth/000333.npy"
-file_name = "000000"
+file_name = "000345"
 folder_name = file_path
 my_base_path = file_pre_path
 
 depth_file_path = my_base_path + folder_name + f"depth_aligned/{file_name}.npy"
+lidar_depth_file_path = my_base_path + folder_name + f"depth_1/{file_name}.npy"
 rgb_file_path = my_base_path + folder_name + f"rgb/{file_name}.png"
 # file_full_path = '/home/benny/docker/data/gml_2025-01-20-15-16-32/'
 # depth_file_path =file_full_path + f"depth_aligned/{file_name}.npy"
 # rgb_file_path = file_full_path + f"rgb/{file_name}.png"
 data = np.load(depth_file_path)
+lidar_data = np.load(lidar_depth_file_path)
 rgb_image = np.array(Image.open(rgb_file_path))
 
 click_count = 0
@@ -43,6 +45,12 @@ def show_depth_npy():
 
     # 转换彩色深度图为RGB格式以便在matplotlib中显示
     depth_map_colored_rgb = cv2.cvtColor(depth_map_colored, cv2.COLOR_BGR2RGB)
+
+    max_depth_lidar = np.max(lidar_data)
+    depth_map_normalized_lidar = (lidar_data / max_depth_lidar * 255).astype(np.uint8)
+    depth_map_colored_lidar = cv2.applyColorMap(depth_map_normalized_lidar, cv2.COLORMAP_JET)
+    depth_map_colored_rgb_lidar = cv2.cvtColor(depth_map_colored_lidar, cv2.COLOR_BGR2RGB)
+
     # if max_depth > 0:
     #     normalized_data = data / max_depth  # 归一化
     # else:
@@ -55,11 +63,11 @@ def show_depth_npy():
     # fig, ax = plt.subplots()
     im1 = ax1.imshow(depth_map_colored_rgb)
     ax1.axis('off')
-    ax1.set_title('Depth Map')
+    ax1.set_title('Depth camera')
 
     # 显示RGB图像
-    im2 = ax2.imshow(rgb_image)
-    ax2.set_title('RGB Image')
+    im2 = ax2.imshow(depth_map_colored_rgb_lidar)
+    ax2.set_title('Depth LiDAR')
     ax2.axis('off')
 
     # 定义一个回调函数来处理鼠标点击事件
@@ -80,7 +88,7 @@ def show_depth_npy():
                 plt.draw()  # 重新绘制图形
 
                 # 显示原始深度值和点击次数
-                print(f"Click {click_count + 1}: Depth at ({ix}, {iy}): {data[iy, ix]}")
+                print(f"Click {click_count + 1}: Depth at ({ix}, {iy}): {data[iy, ix]}, lidar at ({ix}, {iy}): {lidar_data[iy, ix]}")
                 click_count += 1
 
     # 如果你想保留更多的深度信息，可以考虑使用对数尺度或其他方法来映射深度值到灰度级
