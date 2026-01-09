@@ -40,7 +40,7 @@ def show_single_pcd():
 def show_vlmaps_create_result():
     global pcdRS
     # map_path = file_pre_path + file_path + "vlmaps_cam.h5df"
-    map_path = "/home/benny/docker/data/collect_tran/k1020250228floor5big/vlmap_cam/RS/vlmaps_cam.h5df"
+    map_path = "/home/ws/dataset/HM3D_enviroment/vlmaps_dataset/EU6Fwq7SyZv_1/vlmap/vlmaps.h5df"
     # map_path = "/home/benny/fsdownload/vlmaps_cam_lidarDepth.h5df"
     # map_path = file_pre_path + file_path + "vlmaps_cam_lidarDepth.h5df"
     with h5py.File(map_path, "r") as f:
@@ -52,15 +52,21 @@ def show_vlmaps_create_result():
         grid_rgb = f["grid_rgb"][:]
         pcd_min = f["pcd_min"][:]
         pcd_max = f["pcd_max"][:]
-        cs = f["cs"][()]
+        # cs = f["cs"][()]
     grid_height = grid_pos[:, 2] * 0.05
-    grid_height_mask = np.logical_and(grid_height > 0.55, grid_height < 2.0)
+    grid_height_mask = np.logical_and(grid_height > -1.55, grid_height < 20.0)
     grid_pos = grid_pos[grid_height_mask, :]
     rgb = grid_rgb[grid_height_mask, :]
     rgb = rgb / 255.0
     pcd = o3d.geometry.PointCloud()
     pcd.points = o3d.utility.Vector3dVector(grid_pos)
     pcd.colors = o3d.utility.Vector3dVector(rgb)
+        # 计算 XY 方向的最大、最小值
+    xy_min = grid_pos[:, :2].min(axis=0)   # shape (2,)  [x_min, y_min]
+    xy_max = grid_pos[:, :2].max(axis=0)   # shape (2,)  [x_max, y_max]
+
+    print("XY min:", xy_min)
+    print("XY max:", xy_max)
     o3d.visualization.draw_geometries([pcd])
 
 
@@ -76,6 +82,6 @@ def show_pcd():
 
 if __name__ == '__main__':
     # show_single_pcd()
-    # show_vlmaps_create_result()
-    show_pcd()
+    show_vlmaps_create_result()
+    # show_pcd()
     print("hello world")

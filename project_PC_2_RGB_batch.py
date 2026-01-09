@@ -1,5 +1,4 @@
 import numpy as np
-import cupy as cp
 import open3d as o3d
 import cv2
 from numba import jit
@@ -165,24 +164,24 @@ def transform_points(points, T_world_to_camera):
     return filtered_points_camera_near, original_indices_near
 
 
-def transform_points_gpu(points, T_world_to_camera):
-    # 将数据移动到 GPU
-    points_gpu = cp.asarray(points)
-    T_radar_to_world = cp.linalg.inv(cp.asarray(T_world_to_camera))
+# def transform_points_gpu(points, T_world_to_camera):
+#     # 将数据移动到 GPU
+#     points_gpu = cp.asarray(points)
+#     T_radar_to_world = cp.linalg.inv(cp.asarray(T_world_to_camera))
 
-    # 转换为齐次坐标并进行变换
-    points_homogeneous = cp.column_stack((points_gpu, cp.ones(points_gpu.shape[0])))
-    points_camera = (T_radar_to_world @ points_homogeneous.T).T
+#     # 转换为齐次坐标并进行变换
+#     points_homogeneous = cp.column_stack((points_gpu, cp.ones(points_gpu.shape[0])))
+#     points_camera = (T_radar_to_world @ points_homogeneous.T).T
 
-    # 提取三维坐标（忽略齐次坐标的第四维）
-    points_camera = points_camera[:, :3]
+#     # 提取三维坐标（忽略齐次坐标的第四维）
+#     points_camera = points_camera[:, :3]
 
-    # 过滤 z >= 0 的点
-    mask = points_camera[:, 2] >= 0
-    filtered_points_camera = points_camera[mask]
+#     # 过滤 z >= 0 的点
+#     mask = points_camera[:, 2] >= 0
+#     filtered_points_camera = points_camera[mask]
 
-    # 将结果移回 CPU（如果需要）
-    return filtered_points_camera.get()
+#     # 将结果移回 CPU（如果需要）
+#     return filtered_points_camera.get()
 
 def project_points(points_camera, K):
     # 将相机坐标系下的点投影到图像平面上
@@ -344,10 +343,6 @@ def create_depth_map_gpu(u, v, depth, img_shape, K, voxel_size, point_indices):
         for col in range(img_shape[1]):
             if depth_map[row, col] == np.inf:
                 depth_map[row, col] = 0
-    for row in range(img_shape[0]):
-        for col in range(img_shape[1]):
-            if depth_map[row, col] < 1.5:
-                depth_map[row, col] = 0
     return depth_map, index_map
 
 def create_and_save_depth(K, fov_horizontal, fov_vertical, img_shape, points, poses, start_index, store_path, voxel_size):
@@ -386,20 +381,22 @@ def process_pose_chunk(args):
 
 def main():
     # 相机内参
-    K = np.array([
-    [604.5459594726562, 0, 432.69287109375],
-    [0, 604.0941772460938, 254.2894287109375],
-    [0, 0, 1]
-    ])
+    K = np.array(
+        [
+            [608.1165771484375, 0, 436.9500732421875],
+            [0, 608.1304321289062, 246.06228637695312],
+            [0, 0, 1],
+        ]
+    )
     # 筛选出在相机FOV内的点云
     img_shape = (480, 848)  # 图像尺寸
-    fov_horizontal = 69.94  # 水平FOV角度
-    fov_vertical = 43.18  # 垂直FOV角度
+    fov_horizontal = 69.75  # 水平FOV角度
+    fov_vertical = 43.07  # 垂直FOV角度
     voxel_size = 0.01
-    chunk_size = 15
+    chunk_size = 100
     # 文件路径
     pcd_path = file_pre_path + file_path + 'scans.pcd'
-    tum_path = file_pre_path + file_path + 'poses.txt'
+    tum_path = file_pre_path + file_path + 'poses_camera.txt'
     store_path = file_pre_path + file_path + 'depth_1/'
     os.makedirs(store_path, exist_ok=True)
     poses = read_poses(tum_path)
@@ -423,7 +420,7 @@ def main():
         return
 
     print("Starting ThreadPoolExecutor...")
-    with ProcessPoolExecutor(max_workers=100) as executor:
+    with ProcessPoolExecutor(max_workers=16) as executor:
         default_num_threads = executor._max_workers
         print(f"ThreadPoolExecutor is using {default_num_threads} threads by default.")
         futures = executor.map(process_pose_chunk, [

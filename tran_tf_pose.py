@@ -9,13 +9,22 @@ from gmlDogRecordFilePath import file_path
 from gmlDogRecordFilePath import file_pre_path
 
 # 转换矩阵
+# wzh revise 
+tr_matrix_lidar_2_depth = np.array(
+    [
+        [-0.0260397, -0.999638, 0.00668303, 0.119136],
+        [0.0205435, -0.00721906, -0.999763, 0.0577728],
+        [0.999449, -0.0258962, 0.020724, -0.622104],
+        [0.0, 0.0, 0.0, 1.0],
+    ]
+)
 
 # cjs revise depth_floor5_small
-tr_matrix_lidar_2_depth = np.array([
-    [0.0236432,  0.2727882,  0.9617836, 0.0297088],
-    [-0.9994875, -0.0143159,  0.0286304, -0.105938],
-    [0.0215788, -0.9619676,  0.2723099, -0.326056],
-    [0, 0, 0, 1]])
+# tr_matrix_lidar_2_depth = np.array([
+#     [0.0236432,  0.2727882,  0.9617836, 0.0297088],
+#     [-0.9994875, -0.0143159,  0.0286304, -0.105938],
+#     [0.0215788, -0.9619676,  0.2723099, -0.326056],
+#     [0, 0, 0, 1]])
 
 # cjs revise rgb_floor5_small
 # tr_matrix_lidar_2_depth = np.array([

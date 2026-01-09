@@ -10,12 +10,14 @@ from gmlDogRecordFilePath import file_pre_path
 from add_timestamp_to_poses import prepend_timestamps
 # 转换矩阵
 # new application function
-tr_matrix_lidar_2_depth = np.array([
-    [-1.00799236e-02,  3.41871575e-01,  9.39692621e-01, 1.545999999999999978e-02],
-    [-9.99949194e-01, -3.37640348e-03, -9.49790910e-03, 5.539000000000000173e-02],
-    [-7.42837030e-05, -9.39740617e-01,  3.41888239e-01, 1.501099999999999934e-01],
-    [0.000000000000000000e+00, 0.000000000000000000e+00, 0.000000000000000000e+00, 1.000000000000000000e+00]])
-
+tr_matrix_lidar_2_depth = np.array(
+    [
+        [-0.0260711, -0.999474, -0.0193065, 0.105058],
+        [0.0253212, 0.0186466, -0.999505, 0.0714462],
+        [0.999339, -0.026547, 0.0248217, -0.0824605],
+        [0.0, 0.0, 0.0, 1.0],
+    ]
+)
 # cjs revise depth_floor5_small
 # tr_matrix_lidar_2_depth = np.array([
 #     [0.0236432,  0.2727882,  0.9617836, 0.0297088],
@@ -79,7 +81,7 @@ def transform_poses(poses, tr_matrix):
         tr_matrix_inv = np.linalg.inv(tr_matrix)
 
         # tr_camera = tr_matrix @ ori_tr @ tr_matrix_inv
-        tr_camera = ori_tr @ tr_matrix
+        tr_camera = ori_tr @ tr_matrix_inv
         tr_rotation = R.from_matrix(tr_camera[:3, :3])
         tr_quaternion = tr_rotation.as_quat()
         tr_translate = tr_camera[:3, 3]
@@ -101,11 +103,11 @@ def write_poses(poses, store_path):
 
 if __name__ == '__main__':
     folder_name = file_path
-    file_name = 'poses_go2.txt'
+    file_name = 'poses_lidar.txt'
     base_path = file_pre_path
     poses_path = base_path + folder_name + file_name
     store_path = base_path + folder_name + 'poses_camera.txt'
-    stamp_path = base_path + folder_name + 'pose_mid_360_tamp.txt'
+    # stamp_path = base_path + folder_name + 'pose_mid_360_tamp.txt'
     print("file full path：" + base_path + folder_name)
     # 读取雷达位姿
     poses = read_poses(poses_path)
@@ -115,7 +117,7 @@ if __name__ == '__main__':
     write_poses(transformed_poses, store_path)
 
     # 添加时间戳
-    tamp_store_path  = base_path + folder_name + 'poses_camera_tamp.txt'
-    prepend_timestamps(store_path, stamp_path, tamp_store_path)
+    # tamp_store_path  = base_path + folder_name + 'poses_camera_tamp.txt'
+    # prepend_timestamps(store_path, stamp_path, tamp_store_path)
 
     print("位姿转换完成并已写入文件。")

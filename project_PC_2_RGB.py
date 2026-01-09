@@ -2,24 +2,34 @@ import numpy as np
 import open3d as o3d
 import cv2
 from numba import jit
-from tqdm import tqdm
 from scipy.spatial.transform import Rotation as R
 import matplotlib.pyplot as plt
 
-from gmlDogRecordFilePath import file_path,file_pre_path
+from gmlDogRecordFilePath import file_path, file_pre_path
 
 # new application function
-tr_matrix_lidar_2_depth = np.array([
-    [-1.00799236e-02,  3.41871575e-01,  9.39692621e-01, 1.545999999999999978e-02],
-    [-9.99949194e-01, -3.37640348e-03, -9.49790910e-03, 5.539000000000000173e-02],
-    [-7.42837030e-05, -9.39740617e-01,  3.41888239e-01, 1.501099999999999934e-01],
-    [0.000000000000000000e+00, 0.000000000000000000e+00, 0.000000000000000000e+00, 1.000000000000000000e+00]])
+tr_matrix_lidar_2_depth = np.array(
+    [
+        [-0.0260711, -0.999474, -0.0193065, 0.105058],
+        [0.0253212, 0.0186466, -0.999505, 0.0714462],
+        [0.999339, -0.026547, 0.0248217, -0.0824605],
+        [0.0, 0.0, 0.0, 1.0],
+    ]
+)
 
-tr_matrix_lidar_2_dog = np.array([
-    [0.93912, -0.00685, 0.34352, 0.00000],
-    [0.00000, 0.99980, 0.01994, 0.00000],
-    [-0.34359, -0.01873, 0.93893, 0.00000],
-    [0.000000000000000000e+00, 0.000000000000000000e+00, 0.000000000000000000e+00, 1.000000000000000000e+00]])
+# tr_matrix_lidar_2_dog = np.array(
+#     [
+#         [0.93912, -0.00685, 0.34352, 0.00000],
+#         [0.00000, 0.99980, 0.01994, 0.00000],
+#         [-0.34359, -0.01873, 0.93893, 0.00000],
+#         [
+#             0.000000000000000000e00,
+#             0.000000000000000000e00,
+#             0.000000000000000000e00,
+#             1.000000000000000000e00,
+#         ],
+#     ]
+# )
 
 # cjs revise
 # tr_matrix_lidar_2_depth = np.array([
@@ -28,7 +38,7 @@ tr_matrix_lidar_2_dog = np.array([
 #     [0.0215788, -0.9619676,  0.2723099, 0.2],
 #     [0, 0, 0, 1]])
 
-#ld revise
+# ld revise
 # tr_matrix_lidar_2_depth = np.array([
 #     [0.0270124,  0.2756647,  0.9608743, 0.0297088],
 #     [-0.9990314, -0.0259554,  0.0355314, -0.01],
@@ -36,7 +46,7 @@ tr_matrix_lidar_2_dog = np.array([
 #     [0, 0, 0, 1]])
 
 
-#ld
+# ld
 # tr_matrix_lidar_2_depth = np.array([
 #     [0.0232266, -0.999284, 0.0298772, 0.0297088],
 #     [0.280359, -0.0221751, -0.969636, -0.176122],
@@ -52,8 +62,11 @@ tr_matrix_lidar_2_dog = np.array([
 #     [0, 0, 0, 1]
 # ])
 
+
 # 可视化点云
-def visualize_point_cloud(points, points_in_fov, T_world_to_camera, fov_horizontal, fov_vertical):
+def visualize_point_cloud(
+    points, points_in_fov, T_world_to_camera, fov_horizontal, fov_vertical
+):
     # 创建点云并设置点
     pcd = o3d.geometry.PointCloud()
     pcd.points = o3d.utility.Vector3dVector(points)
@@ -84,18 +97,10 @@ def visualize_point_cloud(points, points_in_fov, T_world_to_camera, fov_horizont
     half_fov_vertical_rad = np.deg2rad(fov_vertical / 2)
     # FOV边界点计算（假设距离为1）
     points_fov = [
-        [np.tan(half_fov_horizontal_rad),
-         np.tan(half_fov_vertical_rad),
-         1],
-        [np.tan(half_fov_horizontal_rad),
-         -np.tan(half_fov_vertical_rad),
-         1],
-        [-np.tan(half_fov_horizontal_rad),
-         np.tan(half_fov_vertical_rad),
-         1],
-        [-np.tan(half_fov_horizontal_rad),
-         -np.tan(half_fov_vertical_rad),
-         1]
+        [np.tan(half_fov_horizontal_rad), np.tan(half_fov_vertical_rad), 1],
+        [np.tan(half_fov_horizontal_rad), -np.tan(half_fov_vertical_rad), 1],
+        [-np.tan(half_fov_horizontal_rad), np.tan(half_fov_vertical_rad), 1],
+        [-np.tan(half_fov_horizontal_rad), -np.tan(half_fov_vertical_rad), 1],
     ]
     # 转换到世界坐标系
     # points_fov = np.dot(T_world_to_camera[:3, :3], np.array(points_fov).T).T + camera_position
@@ -103,7 +108,7 @@ def visualize_point_cloud(points, points_in_fov, T_world_to_camera, fov_horizont
     lines = [[0, 1], [1, 3], [3, 2], [2, 0]]
     line_set = o3d.geometry.LineSet(
         points=o3d.utility.Vector3dVector(points_fov),
-        lines=o3d.utility.Vector2iVector(lines)
+        lines=o3d.utility.Vector2iVector(lines),
     )
     # 设置颜色
     line_set.paint_uniform_color([1, 0, 0])
@@ -121,6 +126,7 @@ def visualize_point_cloud(points, points_in_fov, T_world_to_camera, fov_horizont
     render_option.point_size = 0.05  # 设置点的大小
     vis.run()
 
+
 def visualize_points_on_image(points_in_fov, u, v, img_path):
     img = cv2.imread(img_path)
     if img is None:
@@ -131,11 +137,19 @@ def visualize_points_on_image(points_in_fov, u, v, img_path):
     # 应用自定义的热图颜色映射
     colors = colormap_jet(fov_z_values)
     # 由于colors是NumPy数组，我们可以直接使用它而无需再次转换
-    colors_bgr = (colors * 255).astype(np.uint8)[:, ::-1]  # 一次性转换所有颜色到BGR并取整
+    colors_bgr = (colors * 255).astype(np.uint8)[
+        :, ::-1
+    ]  # 一次性转换所有颜色到BGR并取整
     for i in range(len(points_in_fov)):
         # 直接使用转换后的BGR颜色
-        cv2.rectangle(img, (int(u[i]), int(v[i])), (int(u[i]) + 1, int(v[i]) + 1), colors_bgr[i].tolist(), -1)
-    cv2.imshow('Points on Image', img)
+        cv2.rectangle(
+            img,
+            (int(u[i]), int(v[i])),
+            (int(u[i]) + 1, int(v[i]) + 1),
+            colors_bgr[i].tolist(),
+            -1,
+        )
+    cv2.imshow("Points on Image", img)
     cv2.waitKey(0)
     cv2.destroyAllWindows()
 
@@ -157,6 +171,7 @@ def visualize_global_point_cloud(global_pcd):
     vis.run()
     vis.destroy_window()
 
+
 def visual_voxel(pcd):
     pc = o3d.geometry.PointCloud()
     # 将NumPy数组设置为新的点云对象的点
@@ -173,25 +188,32 @@ def visual_voxel(pcd):
     axis_frame = o3d.geometry.TriangleMesh.create_coordinate_frame(axis_length, origin)
     o3d.visualization.draw_geometries([voxel_grid, axis_frame])
 
+
 def read_pcd(file_path):
     pcd = o3d.io.read_point_cloud(file_path)
     # points = np.asarray(pcd.points)
     return pcd
 
+
 def read_camera_pose(tum_format_str):
     data = tum_format_str.split()
     translation = np.array([float(data[0]), float(data[1]), float(data[2])])
-    quaternion = np.array([float(data[3]), float(data[4]), float(data[5]), float(data[6])])
+    quaternion = np.array(
+        [float(data[3]), float(data[4]), float(data[5]), float(data[6])]
+    )
     rotation = R.from_quat(quaternion).as_matrix()
     T_world_to_camera = np.eye(4)
     T_world_to_camera[:3, :3] = rotation
     T_world_to_camera[:3, 3] = translation
     return T_world_to_camera
 
+
 def read_and_tran_camera_pose(tum_format_str, tr_matrix):
     data = tum_format_str.split()
     translation = np.array([float(data[0]), float(data[1]), float(data[2])])
-    quaternion = np.array([float(data[3]), float(data[4]), float(data[5]), float(data[6])])
+    quaternion = np.array(
+        [float(data[3]), float(data[4]), float(data[5]), float(data[6])]
+    )
     ori_rotation_matrix = R.from_quat(quaternion).as_matrix()
     ori_tr = np.eye(4)
     ori_tr[:3, :3] = ori_rotation_matrix
@@ -199,7 +221,7 @@ def read_and_tran_camera_pose(tum_format_str, tr_matrix):
     ori_tr_inv = np.linalg.inv(ori_tr)
     # tr_matrix = tr_matrix_lidar_2_depth
     tr_matrix_inv = np.linalg.inv(tr_matrix)
-    T_world_to_camera = ori_tr @ tr_matrix
+    T_world_to_camera = ori_tr @ tr_matrix_inv
 
     tr_rotation = R.from_matrix(T_world_to_camera[:3, :3])
     tr_quaternion = tr_rotation.as_quat()
@@ -209,10 +231,15 @@ def read_and_tran_camera_pose(tum_format_str, tr_matrix):
     print(new_pose)
     return T_world_to_camera, ori_tr_inv
 
-def read_and_tran_lidar_pose_2(tum_format_str, tr_matrix_lidar_2_dog, tr_matrix_lidar_2_camera):
+
+def read_and_tran_lidar_pose_2(
+    tum_format_str, tr_matrix_lidar_2_dog, tr_matrix_lidar_2_camera
+):
     data = tum_format_str.split()
     translation = np.array([float(data[0]), float(data[1]), float(data[2])])
-    quaternion = np.array([float(data[3]), float(data[4]), float(data[5]), float(data[6])])
+    quaternion = np.array(
+        [float(data[3]), float(data[4]), float(data[5]), float(data[6])]
+    )
     ori_rotation_matrix = R.from_quat(quaternion).as_matrix()
     ori_tr = np.eye(4)
     ori_tr[:3, :3] = ori_rotation_matrix
@@ -232,6 +259,7 @@ def read_and_tran_lidar_pose_2(tum_format_str, tr_matrix_lidar_2_dog, tr_matrix_
     print(new_pose)
     return T_world_to_camera
 
+
 def transform_points(points, T_world_to_camera):
     points_homogeneous = np.column_stack((points, np.ones(points.shape[0])))
     T_world_to_camera_inv = np.linalg.inv(T_world_to_camera)
@@ -241,7 +269,7 @@ def transform_points(points, T_world_to_camera):
     mask = points_camera[:, 2] >= 0
     filtered_points_camera = points_camera[mask]
     original_indices = np.arange(points.shape[0])[mask]
-    mask_far = filtered_points_camera[:, 2] < 9.5
+    mask_far = filtered_points_camera[:, 2] < 5
     filtered_points_camera_near = filtered_points_camera[mask_far]
     original_indices_near = original_indices[mask_far]
     return filtered_points_camera_near, original_indices_near
@@ -266,6 +294,7 @@ def transform_points(points, T_world_to_camera):
 #     # 将结果移回 CPU（如果需要）
 #     return cp.asnumpy(filtered_points_camera)
 
+
 def project_points(points_camera, K):
     # 将相机坐标系下的点投影到图像平面上
     # K 是相机的内参矩阵，points_camera.T 是点的转置，因为通常期望点的坐标是 (N, 3) 形状，而内参矩阵与 (3, N) 形状的数组相乘
@@ -284,8 +313,9 @@ def project_points(points_camera, K):
     return u, v, depth
 
 
-
-def filter_points_within_fov(u, v, depth, img_shape, fov_horizontal, fov_vertical, points_camera):
+def filter_points_within_fov(
+    u, v, depth, img_shape, fov_horizontal, fov_vertical, points_camera
+):
     height, width = img_shape
     half_fov_horizontal = np.deg2rad(fov_horizontal / 2)
     half_fov_vertical = np.deg2rad(fov_vertical / 2)
@@ -296,17 +326,27 @@ def filter_points_within_fov(u, v, depth, img_shape, fov_horizontal, fov_vertica
     min_x = -max_x
     max_y = np.tan(half_fov_vertical) * depth
     min_y = -max_y
-    mask = (u >= 0) & (u < width) & (v >= 0) & (v < height) & \
-           (x_camera >= min_x) & (x_camera <= max_x) & (y_camera >= min_y) & (y_camera <= max_y)
+    mask = (
+        (u >= 0)
+        & (u < width)
+        & (v >= 0)
+        & (v < height)
+        & (x_camera >= min_x)
+        & (x_camera <= max_x)
+        & (y_camera >= min_y)
+        & (y_camera <= max_y)
+    )
     return mask
+
 
 # 应用热力图颜色映射
 def colormap_jet(z_values):
     # 使用matplotlib的jet colormap
-    cmap = plt.get_cmap('jet')
+    cmap = plt.get_cmap("jet")
     norm = plt.Normalize(vmin=np.min(z_values), vmax=np.max(z_values))
     colors = cmap(norm(z_values))[:, :3]  # 只取RGB值，不取alpha通道
     return colors
+
 
 def create_depth_map(u, v, depth, img_shape, K, voxel_size):
     depth_map = np.full(img_shape, np.inf, dtype=np.float32)
@@ -391,14 +431,15 @@ def create_depth_map_gpu(u, v, depth, img_shape, K, voxel_size, point_indices):
 def display_depth_map(depth_map):
     depth_map_normalized = (depth_map / np.max(depth_map) * 255).astype(np.uint8)
     depth_map_colored = cv2.applyColorMap(depth_map_normalized, cv2.COLORMAP_JET)
-    cv2.imshow('Depth Map', depth_map_colored)
+    cv2.imshow("Depth Map", depth_map_colored)
     cv2.waitKey(0)
     cv2.destroyAllWindows()
+
 
 # 从文件中读取雷达位姿
 def read_poses(file_path):
     poses = []
-    with open(file_path, 'r') as file:
+    with open(file_path, "r") as file:
         for line in file:
             parts = line.strip().split()
             if len(parts) == 7:
@@ -407,6 +448,7 @@ def read_poses(file_path):
                 pose = [translation, quaternion]
                 poses.append(pose)
     return poses
+
 
 def get_voxels_center(voxel_grid):
     # 提取体素中心坐标
@@ -448,6 +490,7 @@ def unproject_depth_map(depth_map, K, T_world_to_camera):
 
     return pc_global_homo[:3, :].T, pc.T
 
+
 def get_depth_point(T_world_to_camera, index_map, points, K):
     # 提取所有非负的有效索引
     valid_indices = np.unique(index_map[index_map >= 0])
@@ -471,66 +514,74 @@ def get_depth_point(T_world_to_camera, index_map, points, K):
 
     return filtered_pc_camera, u, v, depth
 
+
 def main():
     # 相机内参
-    K = np.array([
-    [604.5459594726562, 0, 432.69287109375],
-    [0, 604.0941772460938, 254.2894287109375],
-    [0, 0, 1]
-    ])
+    K = np.array(
+        [
+            [608.1165771484375, 0, 436.9500732421875],
+            [0, 608.1304321289062, 246.06228637695312],
+            [0, 0, 1],
+        ]
+    )
     # 筛选出在相机FOV内的点云
     img_shape = (480, 848)  # 图像尺寸
-    fov_horizontal = 70.08  # 水平FOV角度
-    fov_vertical = 43.31  # 垂直FOV角度
+    fov_horizontal = 69.75  # 水平FOV角度
+    fov_vertical = 43.07  # 垂直FOV角度
     voxel_size = 0.05
     # 文件路径
-    pcd_path = file_pre_path + file_path + 'scans.pcd'
+    pcd_path = file_pre_path + file_path + "scans.pcd"
     # pcd_path = file_pre_path + file_path + '_livox_lidar/1737357392_600268602.pcd'
     # tum_path = file_pre_path + file_path + 'poses.txt'
-    img_path = file_pre_path + file_path + '_camera_color_image_raw/1743498555_062030792.png'
+    img_path = file_pre_path + file_path + "/images/000177.png"
     # pcd_path = '/media/benny/GML_FLOOR7/2025-1-21/pcd/1.pcd'
     # img_path = '/media/benny/GML_FLOOR7/2025-1-21/IMG/1.jpg'
     # store_path = file_pre_path + file_path + 'depth/'
-    tum_format_str = "5.965400696 -1.297876477 2.146819592 0.248787075 0.022817513 -0.721599042 0.645661831"
+    tum_format_str = "2.248207 -0.457592 -0.019514 0.020293 0.018570 -0.838201 0.544668"
     # poses = read_poses(tum_path)
     # 读取点云数据
     points = read_pcd(pcd_path)
 
-    voxel_grid = o3d.geometry.VoxelGrid.create_from_point_cloud(points, voxel_size=voxel_size)
+    voxel_grid = o3d.geometry.VoxelGrid.create_from_point_cloud(
+        points, voxel_size=voxel_size
+    )
     points, voxel_indices = get_voxels_center(voxel_grid)
 
     # no tran
     # T_world_to_camera = read_camera_pose(tum_format_str)
 
-
     # with tran lidar to camera
-    T_world_to_camera, ori_tr_inv = read_and_tran_camera_pose(tum_format_str, tr_matrix_lidar_2_depth)
+    T_world_to_camera, ori_tr_inv = read_and_tran_camera_pose(
+        tum_format_str, tr_matrix_lidar_2_depth
+    )
     # T_world_to_camera = read_and_tran_lidar_pose_2(tum_format_str, tr_matrix_lidar_2_dog, tr_matrix_lidar_2_depth)
-
 
     points_camera, original_indices = transform_points(points, T_world_to_camera)
     visual_voxel(points_camera)
 
     u, v, depth = project_points(points_camera, K)
-    mask = filter_points_within_fov(u, v, depth, img_shape, fov_horizontal, fov_vertical, points_camera)
+    mask = filter_points_within_fov(
+        u, v, depth, img_shape, fov_horizontal, fov_vertical, points_camera
+    )
     points_in_fov = points_camera[mask]
     original_indices_in_fov = original_indices[mask]
     # visual_voxel(points_in_fov)
 
     u_f = u[mask]
     v_f = v[mask]
-    depth_map, index_map = create_depth_map_gpu(u_f, v_f, points_in_fov[:, 2], img_shape, K, voxel_size, original_indices_in_fov)
-    # display_depth_map(depth_map)
+    depth_map, index_map = create_depth_map_gpu(
+        u_f, v_f, points_in_fov[:, 2], img_shape, K, voxel_size, original_indices_in_fov
+    )
+    display_depth_map(depth_map)
     print(f"points_in_fov num：{len(points_in_fov)} ")
 
-    filtered_pc_camera, u_ft, v_ft, depth = get_depth_point(T_world_to_camera, index_map, points, K)
+    filtered_pc_camera, u_ft, v_ft, depth = get_depth_point(
+        T_world_to_camera, index_map, points, K
+    )
     # visual_voxel(points_in_fov)
     visual_voxel(filtered_pc_camera)
     # 可视化结果
     visualize_points_on_image(filtered_pc_camera, u_ft, v_ft, img_path)
-
-
-
 
 
 # def base_index_map_create_depth_map(T_world_to_camera, depth_map, img_shape, index_map, points):
@@ -570,5 +621,5 @@ def main():
 #     cv2.destroyAllWindows()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()

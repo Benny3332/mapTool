@@ -2,12 +2,14 @@ import cv2
 import numpy as np
 import matplotlib.pyplot as plt
 from PIL import Image
+from gmlDogRecordFilePath import file_path, file_pre_path
 
 click_count = 0
 
 def display_depth_map_with_click(file_path, rgb_file_path):
     # 使用OpenCV加载PNG图像，以保留原始深度信息（如16位）
     depth_map = cv2.imread(file_path, cv2.IMREAD_UNCHANGED)
+    print(rgb_file_path)
     rgb_image = np.array(Image.open(rgb_file_path))
     # OpenCV默认以BGR格式加载彩色图像，但深度图通常是灰度图
     # 如果加载的是彩色图像，需要转换为灰度图
@@ -69,6 +71,6 @@ def display_depth_map_with_click(file_path, rgb_file_path):
 
 if __name__ == "__main__":
     # 示例用法
-    file_path = '/media/benny/bennyMove/data/dog_origin/gml_2024-11-05-14-54-19/_camera_depth_image_rect_raw/' + '1730789679_969365597.png'
-    rgb_file_path = '/media/benny/bennyMove/data/dog_origin/gml_2024-11-05-14-54-19/_camera_color_image_raw/' + '1730789679_969409466.png'
-    display_depth_map_with_click(file_path, rgb_file_path)
+    depth_file_path = file_pre_path + file_path+ "depth_png/000122.png"
+    rgb_file_path = file_pre_path + file_path + "images/000122.png"
+    display_depth_map_with_click(depth_file_path, rgb_file_path)

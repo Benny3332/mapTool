@@ -5,13 +5,13 @@ import matplotlib.cm as cm
 from PIL import Image
 from gmlDogRecordFilePath import file_path, file_pre_path
 # file_path = "/home/benny/conda/MattHabitat/vlmaps_dataset/5LpN3gDmAk7_1/depth/000333.npy"
-file_name = "000345"
+file_name = "000122"
 folder_name = file_path
 my_base_path = file_pre_path
 
-depth_file_path = my_base_path + folder_name + f"depth_aligned/{file_name}.npy"
+depth_file_path = my_base_path + folder_name + f"depth_1/{file_name}.npy"
 lidar_depth_file_path = my_base_path + folder_name + f"depth_1/{file_name}.npy"
-rgb_file_path = my_base_path + folder_name + f"rgb/{file_name}.png"
+rgb_file_path = my_base_path + folder_name + f"images/{file_name}.png"
 # file_full_path = '/home/benny/docker/data/gml_2025-01-20-15-16-32/'
 # depth_file_path =file_full_path + f"depth_aligned/{file_name}.npy"
 # rgb_file_path = file_full_path + f"rgb/{file_name}.png"
@@ -66,8 +66,8 @@ def show_depth_npy():
     ax1.set_title('Depth camera')
 
     # 显示RGB图像
-    im2 = ax2.imshow(depth_map_colored_rgb_lidar)
-    ax2.set_title('Depth LiDAR')
+    im2 = ax2.imshow(rgb_image)
+    ax2.set_title('RGB Image')
     ax2.axis('off')
 
     # 定义一个回调函数来处理鼠标点击事件
